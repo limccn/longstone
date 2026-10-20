@@ -50,10 +50,19 @@ export function stampCommitments(
     throw new Error('stamp requires a positive blockHeight');
   }
 
-  return commitments.map((commitment) => ({
-    ...commitment,
-    signer: context.signer,
-    blockHeight: context.blockHeight,
-    prev: context.prev,
-  }));
+  return commitments.map((commitment) => {
+    // M1 accepts only op = 0. The contract reverts on anything else, so a
+    // non-zero op reaching broadcast wastes gas on a simulation that was going
+    // to fail — but more importantly, this is the seam where M3's derive op
+    // will land, and the check should move then rather than be rediscovered.
+    if (commitment.op !== 0) {
+      throw new Error(`unsupported op ${commitment.op}: M1 anchors puts only`);
+    }
+    return {
+      ...commitment,
+      signer: context.signer,
+      blockHeight: context.blockHeight,
+      prev: context.prev,
+    };
+  });
 }

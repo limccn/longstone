@@ -74,3 +74,21 @@ describe('placeholder stamping (P0-1 / R2)', () => {
     }
   });
 });
+
+describe('op guard', () => {
+  it('rejects a non-zero op before broadcast', () => {
+    // M1 anchors puts only; the contract reverts on anything else. Failing here
+    // costs nothing, failing at simulation costs a round trip, and failing on
+    // chain costs gas.
+    const derived = placeholder({ op: 1 });
+    expect(() =>
+      stampCommitments([derived], { signer: SIGNER, blockHeight: 1n, prev: ZERO_BYTES32 }),
+    ).toThrow(/unsupported op 1/);
+  });
+
+  it('accepts op 0', () => {
+    expect(() =>
+      stampCommitments([placeholder()], { signer: SIGNER, blockHeight: 1n, prev: ZERO_BYTES32 }),
+    ).not.toThrow();
+  });
+});
