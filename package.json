@@ -1,22 +1,48 @@
 {
   "name": "longstone",
   "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "bin": {
-    "longstone": "./dist/cli.js"
+  "private": false,
+  "description": "Sovereign agent-memory client: MCP server and CLI that sign locally and anchor memories on an Ethereum chain.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/limccn/longstone.git"
   },
+  "homepage": "https://github.com/limccn/longstone",
+  "bugs": {
+    "url": "https://github.com/limccn/longstone/issues"
+  },
+  "keywords": [
+    "memory",
+    "mcp",
+    "ai-agent",
+    "ethereum",
+    "longstone"
+  ],
+  "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }
   },
+  "bin": {
+    "longstone": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.test.json",
-    "demo:e2e": "tsx scripts/demo-e2e.ts"
+    "demo:e2e": "tsx scripts/demo-e2e.ts",
+    "prepublishOnly": "pnpm build && pnpm test"
   },
   "dependencies": {
     "@hisaishi/gateway": "workspace:*",

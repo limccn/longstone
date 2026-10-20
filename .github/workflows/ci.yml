@@ -1,0 +1,60 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# longstone imports both `@menhir/core` and `@hisaishi/gateway` as
+# `workspace:*`; its end-to-end test also drives the real contract from the
+# menhir repo on a local Hardhat node.
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: workspace/longstone
+      - uses: actions/checkout@v4
+        with:
+          repository: limccn/menhir
+          token: ${{ secrets.MENHIR_REPO_TOKEN || github.token }}
+          path: workspace/menhir
+      - uses: actions/checkout@v4
+        with:
+          repository: limccn/hisaishi
+          token: ${{ secrets.HISAISHI_REPO_TOKEN || github.token }}
+          path: workspace/hisaishi
+
+      - name: Assemble workspace
+        working-directory: workspace
+        run: |
+          printf 'packages:\n  - "menhir/ts"\n  - "menhir/contracts"\n  - "hisaishi"\n  - "longstone"\n' > pnpm-workspace.yaml
+          printf '{"name":"ci-workspace","private":true,"packageManager":"pnpm@12.11.2"}\n' > package.json
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: workspace/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: pnpm install --no-frozen-lockfile
+        working-directory: workspace
+
+      - run: pnpm --filter @menhir/core build
+        working-directory: workspace
+      - run: pnpm --filter @hisaishi/gateway build
+        working-directory: workspace
+      - run: pnpm --filter @menhir/contracts build
+        working-directory: workspace
+
+      - run: pnpm --filter longstone build
+        working-directory: workspace
+      - run: pnpm --filter longstone test
+        working-directory: workspace
+      - run: pnpm --filter longstone typecheck
+        working-directory: workspace
