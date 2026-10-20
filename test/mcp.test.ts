@@ -65,3 +65,55 @@ describe('MCP server', () => {
     }
   });
 });
+describe('stdio entry is reachable and answers', () => {
+  it('`longstone serve` completes initialize and lists six tools', async () => {
+    // The PRD AC is that the MCP server "answers tools/list". Before this test
+    // no entry point called `serveMcp`, so the server existed but could never
+    // be started — the AC was unverified rather than passing.
+    const { spawn } = await import('node:child_process');
+    const child = spawn('node', ['dist/cli.js', 'serve'], {
+      cwd: import.meta.dirname + '/..',
+      stdio: ['pipe', 'pipe', 'ignore'],
+    });
+
+    const write = (obj: unknown) => child.stdin.write(`${JSON.stringify(obj)}\n`);
+    write({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2026-07-28',
+        capabilities: {},
+        clientInfo: { name: 'test', version: '1' },
+      },
+    });
+    write({ jsonrpc: '2.0', method: 'notifications/initialized' });
+    write({ jsonrpc: '2.0', id: 2, method: 'tools/list' });
+
+    const lines: string[] = [];
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('MCP server did not answer')), 20_000);
+      child.stdout.on('data', (chunk: Buffer) => {
+        for (const line of chunk.toString().split('\n')) {
+          if (line.trim() === '') continue;
+          lines.push(line);
+          if (lines.length >= 2) {
+            clearTimeout(timer);
+            resolve();
+          }
+        }
+      });
+      child.on('error', reject);
+    });
+    child.kill();
+
+    const responses = lines.map((line) => JSON.parse(line) as Record<string, unknown>);
+    const init = responses.find((r) => r.id === 1) as { result: { serverInfo: { name: string } } };
+    expect(init.result.serverInfo.name).toBe('longstone');
+
+    const list = responses.find((r) => r.id === 2) as {
+      result: { tools: Array<{ name: string }> };
+    };
+    expect(list.result.tools.map((t) => t.name).sort()).toEqual(EXPECTED_TOOLS);
+  }, 30_000);
+});

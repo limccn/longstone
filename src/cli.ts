@@ -305,6 +305,20 @@ program
     }
   });
 
+program
+  .command('serve')
+  .description('run the MCP server over stdio (for agent hosts)')
+  .action(async () => {
+    try {
+      // Imported lazily: a CLI invocation that never serves should not pay the
+      // MCP SDK's import cost, and a broken SDK should not break `longstone --help`.
+      const { serveMcp } = await import('./mcp.js');
+      await serveMcp();
+    } catch (error) {
+      handleError(error);
+    }
+  });
+
 program.parseAsync(process.argv).catch(() => {
   process.exitCode = 1;
 });
