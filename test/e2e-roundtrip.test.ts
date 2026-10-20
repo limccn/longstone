@@ -290,6 +290,32 @@ describe('sovereign direct verify (gateway unreachable)', () => {
     expect(result).toBeInstanceOf(Error);
     expect((result as Error).message).not.toContain('gateway must not be used');
 
+    // The stronger case: with an OWNER supplied, resolving the commitment must
+    // go through the indexer, not `gate.list`. That path is what an earlier
+    // implementation got wrong — it would have failed with the gateway down.
+    const withOwner = await verify(
+      {
+        gate: {
+          stage: forbidden,
+          build: forbidden,
+          confirm: forbidden,
+          list: forbidden,
+          fetchContent: forbidden,
+        } as never,
+        registry,
+        scan: (owner) => scanOwner({ registryAddress, owner, rpcUrl: RPC, fromBlock: 0n, chunk: 1000 }),
+      },
+      {
+        cid: 'bafkreifake',
+        owner: ownerAddress,
+        direct: true,
+        ipfsGateway: 'http://127.0.0.1:1',
+      },
+    ).catch((error: unknown) => error as Error);
+
+    expect(withOwner).toBeInstanceOf(Error);
+    expect((withOwner as Error).message).not.toContain('gateway must not be used');
+
     // The chain side is fully verifiable with no gateway at all.
     expect(await registry.isDeep(commitmentHashValue)).toBe(true);
     expect(await registry.isActive(commitmentHashValue)).toBe(true);

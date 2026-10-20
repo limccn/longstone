@@ -83,28 +83,48 @@ export async function verify(deps: VerifyDeps, options: VerifyOptions): Promise<
     expectedContentHash = commitment.contentHash;
     expectedCidDigest = commitment.cidDigest;
   } else if (options.owner !== undefined) {
-    const rows: MemoryRowResponse[] = await gate.list({ owner: options.owner, limit: 200 });
-    const matching = rows.find((row) => row.cid === cid || row.cidDigest === computedCidDigest);
-    if (matching !== undefined) {
-      commitmentHashValue = matching.commitmentHash;
-      expectedContentHash = matching.contentHash;
-      expectedCidDigest = matching.cidDigest;
-      hashSource = matching.commitmentHash === null ? 'gate-row' : 'gate-row';
-      // A null derived hash means the row is not yet batched; the digests are
-      // still comparable, and `anchored` below reports the truth.
-      if (matching.commitmentHash === null) commitmentHashValue = null;
-    } else if (deps.scan !== undefined) {
-      const index = await deps.scan(options.owner);
-      const hit = index.order.find((h) => {
-        const entry = index.byHash.get(h);
-        return entry !== undefined && entry.commitment.cidDigest === computedCidDigest;
-      });
-      if (hit !== undefined) {
-        const entry = index.byHash.get(hit)!;
-        commitmentHashValue = hit;
-        expectedContentHash = entry.commitment.contentHash;
-        expectedCidDigest = entry.commitment.cidDigest;
-        hashSource = 'indexer';
+    // `--direct` must not touch the gateway at all (PRD AC). Resolving through
+    // the indexer first keeps that promise; the gateway's list route is only a
+    // convenience path when the caller explicitly wants it.
+    if (options.direct === true) {
+      if (deps.scan !== undefined) {
+        const index = await deps.scan(options.owner);
+        const hit = index.order.find((h) => {
+          const entry = index.byHash.get(h);
+          return entry !== undefined && entry.commitment.cidDigest === computedCidDigest;
+        });
+        if (hit !== undefined) {
+          const entry = index.byHash.get(hit)!;
+          commitmentHashValue = hit;
+          expectedContentHash = entry.commitment.contentHash;
+          expectedCidDigest = entry.commitment.cidDigest;
+          hashSource = 'indexer';
+        }
+      }
+    } else {
+      const rows: MemoryRowResponse[] = await gate.list({ owner: options.owner, limit: 200 });
+      const matching = rows.find((row) => row.cid === cid || row.cidDigest === computedCidDigest);
+      if (matching !== undefined) {
+        commitmentHashValue = matching.commitmentHash;
+        expectedContentHash = matching.contentHash;
+        expectedCidDigest = matching.cidDigest;
+        hashSource = 'gate-row';
+        // A null derived hash means the row is not yet batched; the digests are
+        // still comparable, and `anchored` below reports the truth.
+        if (matching.commitmentHash === null) commitmentHashValue = null;
+      } else if (deps.scan !== undefined) {
+        const index = await deps.scan(options.owner);
+        const hit = index.order.find((h) => {
+          const entry = index.byHash.get(h);
+          return entry !== undefined && entry.commitment.cidDigest === computedCidDigest;
+        });
+        if (hit !== undefined) {
+          const entry = index.byHash.get(hit)!;
+          commitmentHashValue = hit;
+          expectedContentHash = entry.commitment.contentHash;
+          expectedCidDigest = entry.commitment.cidDigest;
+          hashSource = 'indexer';
+        }
       }
     }
   }
