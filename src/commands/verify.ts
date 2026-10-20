@@ -6,6 +6,7 @@
  * the bytes are sufficient.
  */
 
+import { buildGatewayUrl } from '@hisaishi/gateway';
 import { cidDigest, contentHash, parseMemoryContent } from '@menhir/core';
 
 import type { GateClient, MemoryRowResponse } from '../gate.js';
@@ -41,14 +42,28 @@ export interface VerifyDeps {
   scan?: (owner: `0x${string}`) => Promise<ChainIndex>;
 }
 
+/**
+ * Fetch from the configured dedicated gateway without touching hisaishi.
+ *
+ * Uses the shared `/ipfs/<cid>` builder: Pinata's gateways answer 400 for a
+ * bare `/<cid>`, which is exactly what this path did before the fix — the
+ * gateway proxy had been corrected but this second URL builder was missed.
+ */
 function fetchDirect(gateway: string, cid: string): Promise<Uint8Array> {
-  const base = gateway.replace(/\/+$/, '');
-  return fetch(`${base}/${encodeURIComponent(cid)}`).then(async (response) => {
+  const url = buildGatewayUrl(gateway, cid);
+  return fetch(url).then(async (response) => {
+    if (response.status === 403) {
+      // Pinata says "not pinned" with 403, not 404.
+      const body = await response.text().catch(() => '');
+      if (/pinned|does not have this content/i.test(body)) {
+        fail({ code: 'GATE_REJECTED', gateCode: 'CONTENT_NOT_FOUND', detail: `${cid} is not pinned` });
+      }
+    }
     if (!response.ok) {
       fail({
         code: 'GATE_REJECTED',
         gateCode: response.status === 404 ? 'CONTENT_NOT_FOUND' : 'GATEWAY_UPSTREAM',
-        detail: `${base}/${cid} returned ${response.status}`,
+        detail: `${url} returned ${response.status}`,
       });
     }
     return new Uint8Array(await response.arrayBuffer());

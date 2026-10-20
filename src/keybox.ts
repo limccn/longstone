@@ -14,8 +14,13 @@ import { privateKeyToAccount, type PrivateKeyAccount } from 'viem/accounts';
 import { fail } from './errors.js';
 
 export interface Keybox {
-  /** Delegated signing key — stamps `signer` and signs transactions. */
-  signer: PrivateKeyAccount;
+  /**
+   * Delegated signing key — stamps `signer` and signs transactions.
+   * Null when only an owner operation was requested (acl), which does not need
+   * it. Requiring both keys for an owner-only command was a real failure: the
+   * grant could not run with the owner key alone.
+   */
+  signer: PrivateKeyAccount | null;
   /** Owner key, when present (acl grant/revoke, retract-any). */
   owner: PrivateKeyAccount | null;
 }
@@ -32,17 +37,45 @@ function readKey(name: string, env: NodeJS.ProcessEnv): PrivateKeyAccount | null
   return privateKeyToAccount(value as `0x${string}`);
 }
 
-export function loadKeys(env: NodeJS.ProcessEnv = process.env): Keybox {
+export type KeyNeed = 'signer' | 'owner' | 'any' | false;
+
+export function loadKeys(env: NodeJS.ProcessEnv = process.env, need: KeyNeed = 'any'): Keybox {
   const signer = readKey('LONGSTONE_KEY', env);
-  if (signer === null) {
+  const owner = readKey('LONGSTONE_OWNER_KEY', env);
+
+  if (need === 'signer' && signer === null) {
     fail({
       code: 'NO_KEY',
       detail:
-        'LONGSTONE_KEY is required for put/retract/acl. ' +
-        'Set it to a funded testnet throwaway key; longstone signs and broadcasts locally (model A).',
+        'LONGSTONE_KEY is required to sign and broadcast. Set it to a funded ' +
+        'testnet throwaway key (model A: signing happens locally).',
     });
   }
-  return { signer, owner: readKey('LONGSTONE_OWNER_KEY', env) };
+  if (need === 'owner' && owner === null) {
+    fail({
+      code: 'NO_KEY',
+      detail: 'LONGSTONE_OWNER_KEY is required for acl grant/revoke.',
+    });
+  }
+  if (need !== false && signer === null && owner === null) {
+    fail({
+      code: 'NO_KEY',
+      detail: 'Set LONGSTONE_KEY (signing) and/or LONGSTONE_OWNER_KEY (owner ops).',
+    });
+  }
+  return { signer, owner };
+}
+
+/**
+ * The account to sign with: owner when present (implicit superuser), otherwise
+ * the delegated signer. Fails when neither key was loaded.
+ */
+export function pickSigningAccount(keys: Keybox): PrivateKeyAccount {
+  const account = keys.owner ?? keys.signer;
+  if (account === null) {
+    fail({ code: 'NO_KEY', detail: 'no signing key loaded' });
+  }
+  return account;
 }
 
 /** The banner must appear every time a key loads, not once per machine. */

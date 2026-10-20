@@ -18,6 +18,7 @@ import { retract } from './commands/retract.js';
 import { stageStatus } from './commands/stage-status.js';
 import { verify } from './commands/verify.js';
 import { LongstoneFailure } from './errors.js';
+import { pickSigningAccount } from './keybox.js';
 import { createContext } from './context.js';
 import { loadConfig } from './config.js';
 
@@ -56,9 +57,9 @@ export function createMcpServer(): McpServer {
       },
     },
     async (args: { text: string; tags?: string[] | undefined; prev?: string | undefined; owner?: string | undefined }) => {
-      const ctx = await createContext({ config: loadConfig(), requireKeys: true });
+      const ctx = await createContext({ config: loadConfig(), requireKeys: 'signer' });
       try {
-        const account = ctx.keys!.signer;
+        const account = ctx.keys!.signer!;
         const result = await put(
           { config: ctx.config, gate: ctx.gate, registry: ctx.registry },
           {
@@ -166,7 +167,7 @@ export function createMcpServer(): McpServer {
       inputSchema: { commitmentHash: BYTES32, replacedBy: BYTES32.optional() },
     },
     async (args: { commitmentHash: string; replacedBy?: string | undefined }) => {
-      const ctx = await createContext({ config: loadConfig(), requireKeys: true });
+      const ctx = await createContext({ config: loadConfig(), requireKeys: 'any' });
       try {
         const result = await retract(
           { registry: ctx.registry },
@@ -175,7 +176,7 @@ export function createMcpServer(): McpServer {
             ...(args.replacedBy === undefined
               ? {}
               : { replacedBy: args.replacedBy as `0x${string}` }),
-            account: ctx.keys!.owner ?? ctx.keys!.signer,
+            account: pickSigningAccount(ctx.keys!),
           },
         );
         return { content: [{ type: 'text' as const, text: JSON.stringify(toJson(result)) }] };
@@ -204,8 +205,8 @@ export function createMcpServer(): McpServer {
       signer: string;
       roles?: Array<'commit' | 'retract'> | undefined;
     }) => {
-      const needsKey = args.action !== 'list';
-      const ctx = await createContext({ config: loadConfig(), requireKeys: needsKey });
+      const need = args.action === 'list' ? false : ('owner' as const);
+      const ctx = await createContext({ config: loadConfig(), requireKeys: need });
       try {
         const result = await acl(
           { registry: ctx.registry },
@@ -214,9 +215,7 @@ export function createMcpServer(): McpServer {
             owner: args.owner as `0x${string}`,
             signer: args.signer as `0x${string}`,
             ...(args.roles === undefined ? {} : { roles: args.roles }),
-            ...(ctx.keys === null
-              ? {}
-              : { ownerAccount: ctx.keys.owner ?? ctx.keys.signer }),
+            ...(ctx.keys === null ? {} : { ownerAccount: ctx.keys.owner! }),
           },
         );
         return { content: [{ type: 'text' as const, text: JSON.stringify(toJson(result)) }] };

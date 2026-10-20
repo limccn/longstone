@@ -11,7 +11,7 @@ import type { LongstoneConfig } from './config.js';
 import { createGate, type GateClient } from './gate.js';
 import { createRegistry, type RegistryClient } from './registry.js';
 import { scanOwner, type ChainIndex } from './indexer.js';
-import { loadKeys, type Keybox } from './keybox.js';
+import { loadKeys, type KeyNeed, type Keybox } from './keybox.js';
 
 export interface CommandContext {
   config: LongstoneConfig;
@@ -24,8 +24,8 @@ export interface CommandContext {
 
 export interface ContextOptions {
   config: LongstoneConfig;
-  /** When true, keys are loaded and the throwaway banner is the caller's job. */
-  requireKeys?: boolean;
+  /** Which key the command needs; `false` loads none. */
+  requireKeys?: KeyNeed;
   env?: NodeJS.ProcessEnv;
 }
 
@@ -65,7 +65,10 @@ export async function createContext(options: ContextOptions): Promise<CommandCon
     config,
     gate,
     registry,
-    keys: options.requireKeys === true ? loadKeys(env) : null,
+    keys:
+      options.requireKeys === undefined || options.requireKeys === false
+        ? null
+        : loadKeys(env, options.requireKeys),
     scan: (owner) =>
       scanOwner({
         registryAddress: config.registryAddress,

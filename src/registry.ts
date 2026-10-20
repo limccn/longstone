@@ -10,6 +10,7 @@
  */
 
 import {
+  encodeFunctionData,
   BaseError,
   ContractFunctionRevertedError,
   createPublicClient,
@@ -61,6 +62,70 @@ function translate(error: unknown): never {
   fail({ code: 'RPC_UNAVAILABLE', detail: (error as Error).message });
 }
 
+/**
+ * Sign locally, broadcast a raw transaction.
+ *
+ * The sequencer endpoint accepts **only** `eth_sendRawTransaction` (M1-18).
+ * viem's `writeContract` prepares a transaction first (`eth_chainId`,
+ * `eth_estimateGas`, `eth_getTransactionCount`), and those calls are rejected
+ * there — the failure reads "rpc method is not allowed". So every field is
+ * prepared against the general endpoint and the write path is reduced to one
+ * `sendRawTransaction`.
+ */
+async function prepareAndSend(
+  publicClient: PublicClient,
+  broadcastClient: PublicClient,
+  walletClient: WalletClient,
+  account: PrivateKeyAccount | { address: `0x${string}`; type: 'json-rpc' },
+  request: { address: `0x${string}`; abi: readonly unknown[]; functionName: string; args: readonly unknown[] },
+): Promise<`0x${string}`> {
+  // Simulate on the general endpoint: an unauthorized signer, a duplicate or a
+  // bad prev fails here without spending gas.
+  await publicClient.simulateContract({
+    address: request.address,
+    abi: request.abi as never,
+    functionName: request.functionName,
+    args: request.args as never,
+    account,
+  });
+
+  // The ABI is `memoryRegistryAbi`, so the function name and args are known at
+  // runtime; the casts keep the generic call site readable.
+  const data = encodeFunctionData({
+    abi: request.abi,
+    functionName: request.functionName,
+    args: request.args,
+  } as never);
+
+  // Prepare every field on the GENERAL endpoint. The sequencer accepts only
+  // `eth_sendRawTransaction` (M1-18), so nothing may be filled in there — viem's
+  // `writeContract` would call `eth_chainId`/`eth_estimateGas` and fail with
+  // "rpc method is not allowed".
+  const prepared = await publicClient.prepareTransactionRequest({
+    account,
+    to: request.address,
+    data,
+    chain: null,
+  } as never);
+
+  // Production uses a LOCAL account: sign here (model A), then hand the raw
+  // bytes to the sequencer. A JSON-RPC account (local Hardhat tests) has no
+  // `signTransaction`; there the node signs, so the normal write path is used.
+  if ('signTransaction' in account && typeof account.signTransaction === 'function') {
+    const serialized = await account.signTransaction(prepared as never);
+    return broadcastClient.sendRawTransaction({ serializedTransaction: serialized });
+  }
+
+  return walletClient.writeContract({
+    address: request.address,
+    abi: request.abi as never,
+    functionName: request.functionName as never,
+    args: request.args as never,
+    account: account as never,
+    chain: null,
+  } as never);
+}
+
 export function createRegistry(
   config: LongstoneConfig,
   /** Override for tests; production uses the configured endpoints. */
@@ -72,9 +137,17 @@ export function createRegistry(
 
   // Reads go to the general endpoint; writes go to the sequencer, which accepts
   // ONLY eth_sendRawTransaction (M1-18).
+  // A public client pointed at the sequencer, used ONLY for
+  // `eth_sendRawTransaction` (M1-18). Any other call there is rejected.
+  const broadcastClient =
+    clients?.publicClient ??
+    (createPublicClient({ transport: http(config.sequencerUrl) }) as unknown as PublicClient);
+
+  // Used only for JSON-RPC accounts (local tests): the node signs, so the
+  // normal viem write path is appropriate there.
   const walletClient =
     clients?.walletClient ??
-    (createWalletClient({ transport: http(config.sequencerUrl) }) as unknown as WalletClient);
+    (createWalletClient({ transport: http(config.rpcUrl) }) as unknown as WalletClient);
 
   const address = config.registryAddress;
   const abi = memoryRegistryAbi;
@@ -146,22 +219,11 @@ export function createRegistry(
     async commitBatch(commitments, tagLists, account) {
       const args = [commitments, tagLists] as const;
       try {
-        // Simulate first: an unauthorized signer, a duplicate, or a bad prev
-        // fails here without spending gas.
-        await publicClient.simulateContract({
+        return await prepareAndSend(publicClient, broadcastClient, walletClient, account, {
           address,
           abi,
           functionName: 'commitBatch',
-          args: args as never,
-          account,
-        });
-        return await walletClient.writeContract({
-          address,
-          abi,
-          functionName: 'commitBatch',
-          args: args as never,
-          account,
-          chain: null,
+          args,
         });
       } catch (error) {
         translate(error);
@@ -170,20 +232,11 @@ export function createRegistry(
 
     async retract(hash, replacedBy, account) {
       try {
-        await publicClient.simulateContract({
+        return await prepareAndSend(publicClient, broadcastClient, walletClient, account, {
           address,
           abi,
           functionName: 'retract',
           args: [hash, replacedBy],
-          account,
-        });
-        return await walletClient.writeContract({
-          address,
-          abi,
-          functionName: 'retract',
-          args: [hash, replacedBy],
-          account,
-          chain: null,
         });
       } catch (error) {
         translate(error);
@@ -192,20 +245,11 @@ export function createRegistry(
 
     async setSigner(signer, roles, account) {
       try {
-        await publicClient.simulateContract({
+        return await prepareAndSend(publicClient, broadcastClient, walletClient, account, {
           address,
           abi,
           functionName: 'setSigner',
           args: [signer, BigInt(roles)],
-          account,
-        });
-        return await walletClient.writeContract({
-          address,
-          abi,
-          functionName: 'setSigner',
-          args: [signer, BigInt(roles)],
-          account,
-          chain: null,
         });
       } catch (error) {
         translate(error);

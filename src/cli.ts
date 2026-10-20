@@ -16,7 +16,7 @@ import { stageStatus } from './commands/stage-status.js';
 import { verify } from './commands/verify.js';
 import { loadConfig, saveConfig, type LongstoneConfig } from './config.js';
 import { LongstoneFailure, describe } from './errors.js';
-import { warnThrowawayKey } from './keybox.js';
+import { pickSigningAccount, warnThrowawayKey } from './keybox.js';
 import { createContext } from './context.js';
 
 const program = new Command();
@@ -32,12 +32,12 @@ function replacer(_key: string, value: unknown): unknown {
 }
 
 async function withContext<T>(
-  requireKeys: boolean,
+  requireKeys: import('./keybox.js').KeyNeed,
   fn: (ctx: Awaited<ReturnType<typeof createContext>>) => Promise<T>,
 ): Promise<T> {
   const ctx = await createContext({ config: loadConfig(), requireKeys });
   try {
-    if (ctx.keys !== null) warnThrowawayKey(ctx.keys.signer.address);
+    if (ctx.keys !== null) warnThrowawayKey(pickSigningAccount(ctx.keys).address);
     return await fn(ctx);
   } finally {
     await ctx.close();
@@ -64,8 +64,8 @@ program
   .option('--owner <address>', 'owner address (defaults to the signing key)')
   .action(async (options) => {
     try {
-      const result = await withContext(true, async (ctx) => {
-        const account = ctx.keys!.signer;
+      const result = await withContext('signer', async (ctx) => {
+        const account = ctx.keys!.signer!;
         return put(
           { config: ctx.config, gate: ctx.gate, registry: ctx.registry },
           {
@@ -147,13 +147,13 @@ program
   .option('--replaced-by <hash>')
   .action(async (options) => {
     try {
-      const result = await withContext(true, async (ctx) =>
+      const result = await withContext('any', async (ctx) =>
         retract(
           { registry: ctx.registry },
           {
             commitmentHash: options.commitmentHash,
             ...(options.replacedBy === undefined ? {} : { replacedBy: options.replacedBy }),
-            account: ctx.keys!.owner ?? ctx.keys!.signer,
+            account: pickSigningAccount(ctx.keys!),
           },
         ),
       );
@@ -171,7 +171,7 @@ aclCommand
   .option('--roles <roles>', 'comma-separated: commit,retract', (v) => v.split(','))
   .action(async (options) => {
     try {
-      const result = await withContext(true, async (ctx) =>
+      const result = await withContext('owner', async (ctx) =>
         acl(
           { registry: ctx.registry },
           {
@@ -179,7 +179,7 @@ aclCommand
             owner: options.owner,
             signer: options.signer,
             roles: (options.roles ?? ['commit']) as Array<'commit' | 'retract'>,
-            ownerAccount: ctx.keys!.owner ?? ctx.keys!.signer,
+            ownerAccount: ctx.keys!.owner!,
           },
         ),
       );
@@ -195,14 +195,14 @@ aclCommand
   .requiredOption('--signer <address>')
   .action(async (options) => {
     try {
-      const result = await withContext(true, async (ctx) =>
+      const result = await withContext('owner', async (ctx) =>
         acl(
           { registry: ctx.registry },
           {
             action: 'revoke',
             owner: options.owner,
             signer: options.signer,
-            ownerAccount: ctx.keys!.owner ?? ctx.keys!.signer,
+            ownerAccount: ctx.keys!.owner!,
           },
         ),
       );
