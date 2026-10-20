@@ -29,6 +29,15 @@ content bytes are sufficient, by design.
 
 ## Install
 
+From npmjs (also on GitHub Packages):
+
+```bash
+npm install -g @limccn/longstone@0.1.0
+longstone --help
+```
+
+From this workspace:
+
 ```powershell
 pnpm install
 pnpm build
