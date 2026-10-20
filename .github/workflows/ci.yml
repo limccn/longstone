@@ -33,7 +33,7 @@ jobs:
       - name: Assemble workspace
         working-directory: workspace
         run: |
-          printf 'packages:\n  - "menhir/ts"\n  - "menhir/contracts"\n  - "hisaishi"\n  - "longstone"\n' > pnpm-workspace.yaml
+          printf 'packages:\n  - "menhir/ts"\n  - "menhir/contracts"\n  - "hisaishi"\n  - "longstone"\nallowBuilds:\n  "esbuild": true\n  "sharp": true\n  "workerd": true\n' > pnpm-workspace.yaml
           printf '{"name":"ci-workspace","private":true,"packageManager":"pnpm@12.11.2"}\n' > package.json
 
       - uses: pnpm/action-setup@v4
