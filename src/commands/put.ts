@@ -5,7 +5,7 @@
  * Steps 5b (stamp) and 6 (sign) are the ones that cannot move anywhere else.
  */
 
-import { canonicalBytes, cidDigest, contentHash, parseMemoryContent } from '@menhir/core';
+import { canonicalBytes, cidDigest, contentHash, parseMemoryContent } from '@limccn/menhir-core';
 import type { PrivateKeyAccount } from 'viem/accounts';
 
 import type { LongstoneConfig } from '../config.js';
@@ -14,7 +14,7 @@ import type { RegistryClient } from '../registry.js';
 import { waitForReceipt } from '../registry.js';
 import { stampCommitments } from '../stamp.js';
 import { fail } from '../errors.js';
-import { commitmentHash } from '@menhir/core';
+import { commitmentHash } from '@limccn/menhir-core';
 
 export interface PutOptions {
   text: string;

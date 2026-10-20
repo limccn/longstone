@@ -2,7 +2,7 @@
  * Gateway client (design v0.2 §3, D2/D2b).
  *
  * Two transports, ONE result type. `GatewayResult` comes from
- * `@hisaishi/gateway` — the same discriminated union the embedded handle
+ * `@limccn/hisaishi-gateway` — the same discriminated union the embedded handle
  * returns — so this file maps transport differences (HTTP body vs direct
  * object) and nothing else. Adding a second error model here would mean the
  * embedded path could fail differently from the HTTP path.
@@ -12,8 +12,8 @@
  * so nothing downstream sees two shapes.
  */
 
-import type { GatewayHandle, GatewayResult } from '@hisaishi/gateway';
-import type { Commitment } from '@menhir/core';
+import type { GatewayHandle, GatewayResult } from '@limccn/hisaishi-gateway';
+import type { Commitment } from '@limccn/menhir-core';
 
 import type { LongstoneConfig } from './config.js';
 import { fail } from './errors.js';

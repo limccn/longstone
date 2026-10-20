@@ -14,7 +14,7 @@
  * why this is a function with tests rather than three inline assignments.
  */
 
-import type { Commitment } from '@menhir/core';
+import type { Commitment } from '@limccn/menhir-core';
 
 export interface StampContext {
   signer: `0x${string}`;

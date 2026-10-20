@@ -1,4 +1,4 @@
-import { commitmentHash, ZERO_BYTES32, type Commitment } from '@menhir/core';
+import { commitmentHash, ZERO_BYTES32, type Commitment } from '@limccn/menhir-core';
 import { describe, expect, it } from 'vitest';
 
 import { needsStamping, stampCommitments } from '../src/stamp.js';

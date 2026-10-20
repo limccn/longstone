@@ -10,7 +10,7 @@
  */
 
 import { createPublicClient, http, parseEventLogs, type PublicClient } from 'viem';
-import { memoryRegistryAbi, type Commitment } from '@menhir/core';
+import { memoryRegistryAbi, type Commitment } from '@limccn/menhir-core';
 
 export interface IndexedCommitment {
   commitmentHash: `0x${string}`;

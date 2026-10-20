@@ -1,7 +1,7 @@
 /**
  * Registry client (design v0.2 §2, D4/D6/D7).
  *
- * A thin viem wrapper over `@menhir/core`'s generated ABI. Three rules live
+ * A thin viem wrapper over `@limccn/menhir-core`'s generated ABI. Three rules live
  * here and nowhere else:
  *
  *   - revert data is decoded against the ABI (never surfaced raw);
@@ -19,7 +19,7 @@ import {
   type PublicClient,
   type WalletClient,
 } from 'viem';
-import { memoryRegistryAbi, type Commitment } from '@menhir/core';
+import { memoryRegistryAbi, type Commitment } from '@limccn/menhir-core';
 import type { PrivateKeyAccount } from 'viem/accounts';
 
 import type { LongstoneConfig } from './config.js';

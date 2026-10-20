@@ -6,8 +6,8 @@
  * the bytes are sufficient.
  */
 
-import { buildGatewayUrl } from '@hisaishi/gateway';
-import { cidDigest, contentHash, parseMemoryContent } from '@menhir/core';
+import { buildGatewayUrl } from '@limccn/hisaishi-gateway';
+import { cidDigest, contentHash, parseMemoryContent } from '@limccn/menhir-core';
 
 import type { GateClient, MemoryRowResponse } from '../gate.js';
 import type { RegistryClient } from '../registry.js';

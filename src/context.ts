@@ -5,7 +5,7 @@
  * transport-agnostic, so the embedded and HTTP forms cannot diverge in logic.
  */
 
-import { createGateway } from '@hisaishi/gateway/local';
+import { createGateway } from '@limccn/hisaishi-gateway/local';
 
 import type { LongstoneConfig } from './config.js';
 import { createGate, type GateClient } from './gate.js';

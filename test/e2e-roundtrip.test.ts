@@ -19,8 +19,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
-import { createGateway } from '@hisaishi/gateway/local';
-import { memoryRegistryAbi } from '@menhir/core';
+import { createGateway } from '@limccn/hisaishi-gateway/local';
+import { memoryRegistryAbi } from '@limccn/menhir-core';
 import { createPublicClient, createWalletClient, http, parseEventLogs } from 'viem';
 import { baseSepolia } from 'viem/chains';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -234,7 +234,7 @@ describe('M1 roundtrip: put → anchor → fetch → verify', () => {
     const entry = index.byHash.get(commitmentHashValue)!;
     expect(entry.tags).toContain('topic:e2e');
     // The indexer decoded through the generated ABI, so this also proves the
-    // event shape matches @menhir/core's copy of it.
+    // event shape matches @limccn/menhir-core's copy of it.
     expect(entry.commitment.contentHash).toBe(
       (await registry.getCommitment(commitmentHashValue)).contentHash,
     );

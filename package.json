@@ -1,5 +1,5 @@
 {
-  "name": "longstone",
+  "name": "@limccn/longstone",
   "version": "0.1.0",
   "private": false,
   "description": "Sovereign agent-memory client: MCP server and CLI that sign locally and anchor memories on an Ethereum chain.",
@@ -42,11 +42,14 @@
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.test.json",
     "demo:e2e": "tsx scripts/demo-e2e.ts",
-    "prepublishOnly": "pnpm build && pnpm test"
+    "prepublishOnly": "pnpm build && pnpm test",
+    "publish:npm": "pnpm publish --access public --no-git-checks --registry https://registry.npmjs.org/",
+    "publish:gh": "pnpm publish --access public --no-git-checks --registry https://npm.pkg.github.com/",
+    "pack:check": "pnpm pack"
   },
   "dependencies": {
-    "@hisaishi/gateway": "workspace:*",
-    "@menhir/core": "workspace:*",
+    "@limccn/hisaishi-gateway": "workspace:*",
+    "@limccn/menhir-core": "workspace:*",
     "@modelcontextprotocol/server": "2.3.1",
     "commander": "15.0.0",
     "viem": "2.57.7",

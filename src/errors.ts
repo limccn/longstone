@@ -1,13 +1,13 @@
 /**
  * longstone's typed error union (design v0.2 §7).
  *
- * Three sources collapse here: `@menhir/core` validation, contract custom
+ * Three sources collapse here: `@limccn/menhir-core` validation, contract custom
  * errors, and gateway transport/business rejections. A caller must be able to
  * branch on `code` alone; the human text is secondary.
  */
 
 export type LongstoneError =
-  // @menhir/core pass-through; `detail` carries the core message when there is
+  // @limccn/menhir-core pass-through; `detail` carries the core message when there is
   // one, because "SCHEMA_VIOLATION" alone does not tell a caller what to fix.
   | {
       code: 'NON_NORMALIZED_INPUT' | 'TAG_TOO_LONG' | 'SCHEMA_VIOLATION' | 'UNKNOWN_KEY' | 'INVALID_HEX';

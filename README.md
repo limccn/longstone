@@ -95,7 +95,7 @@ raw revert string.
 
 ## How the write path works
 
-1. Content is canonicalized with `@menhir/core` — the same code the contract,
+1. Content is canonicalized with `@limccn/menhir-core` — the same code the contract,
    the browser and the seed script use.
 2. The keyless gateway stages it, recomputes both digests, and pins it.
 3. `build` returns commitments with **placeholders**: `prev = 0`,
