@@ -171,7 +171,11 @@ beforeAll(async () => {
   gateway = await createGateway({
     dbPath: config.hisaishiDbPath,
     rpcUrl: RPC,
+    registryAddress,
     ipfsGateway: config.ipfsGateway,
+    // Explicit offline pin: the test must not require Pinata credentials, and
+    // the adapter is no longer selected by a missing JWT.
+    devMode: true,
   });
 
   // Grant ROLE_COMMIT to the delegated signer so it may commit for the owner.

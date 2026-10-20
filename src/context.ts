@@ -49,7 +49,9 @@ export async function createContext(options: ContextOptions): Promise<CommandCon
     const opened = await createGateway({
       dbPath: config.hisaishiDbPath,
       rpcUrl: config.rpcUrl,
+      registryAddress: config.registryAddress,
       ipfsGateway: config.ipfsGateway,
+      devMode: env.DEV_MODE === 'true',
     });
     gate = await createGate(config, opened.handle);
     close = async () => opened.handle.close();
