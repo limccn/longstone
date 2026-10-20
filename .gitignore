@@ -1,15 +1,10 @@
-# Remix compiler artifacts
-**/artifacts/
-**/artifacts/**
-
-# Remix plugin state folders
-deps/
-states/
-
-# Debug info
-*.dbg.json
+node_modules/
+dist/
 *.tsbuildinfo
 
-# Optional
+# Local configuration and scan cache. Never commit: config holds RPC URLs and
+# the cache is per-machine. Keys live in env vars, never here.
+.longstone/
 .env
-.env.local
+.env.*
+!.env.example
