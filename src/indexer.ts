@@ -12,6 +12,9 @@
 import { createPublicClient, http, parseEventLogs, type PublicClient } from 'viem';
 import { memoryRegistryAbi, type Commitment } from '@limccn/menhir-core';
 
+import { fail } from './errors.js';
+import { redactText } from './redact.js';
+
 export interface IndexedCommitment {
   commitmentHash: `0x${string}`;
   commitment: Commitment;
@@ -26,6 +29,10 @@ export interface ChainIndex {
   byHash: Map<`0x${string}`, IndexedCommitment>;
   order: `0x${string}`[];
   scannedTo: bigint;
+  /** Effective first block scanned: `max(requested, deploymentBlock)`. */
+  startBlock: bigint;
+  /** What the caller/config asked for; differs when clamped to deployment. */
+  requestedStartBlock: bigint;
 }
 
 export interface ScanOptions {
@@ -37,6 +44,7 @@ export interface ScanOptions {
    * absence is rejected up front instead.
    */
   rpcUrl?: string;
+  chainId?: number;
   fromBlock?: bigint;
   /** Initial ceiling; the scanner discovers the provider's real cap. */
   chunk?: number;
@@ -46,6 +54,52 @@ export interface ScanOptions {
 
 const RETRYABLE = /\b(?:429|502|503|504)\b/;
 const RANGE_REJECTION = /\b(?:400|413|414|422)\b|unexpected status code|block range|range is too large|limited to/i;
+
+/**
+ * Deployment-block cache, per RPC endpoint + registry.
+ *
+ * The floor is a property of the deployment, not of the scan, so it is
+ * discovered once per process. `client`-injected scans (tests, embedders) are
+ * not cached: a different client is a different chain view.
+ */
+const DEPLOY_BLOCK_CACHE = new Map<string, bigint>();
+
+function deployBlockCacheKey(options: ScanOptions): string | null {
+  if (options.rpcUrl === undefined) return null;
+  return `${options.rpcUrl}|${options.registryAddress.toLowerCase()}`;
+}
+
+/**
+ * First block at which the registry has code.
+ *
+ * No contract can emit `MemoryCommitted` before it exists, so the deployment
+ * block is a hard floor: scanning below it is provably empty work. The search
+ * is a plain binary search over `eth_getCode` (~log2(head) calls) and handles
+ * a contract that was present at genesis.
+ */
+export async function findDeployBlock(
+  client: PublicClient,
+  registryAddress: `0x${string}`,
+  latest: bigint,
+): Promise<bigint | null> {
+  const codeAt = async (block: bigint): Promise<boolean> => {
+    const code = await client.getCode({ address: registryAddress, blockNumber: block });
+    return code !== undefined && code !== '0x';
+  };
+
+  if (!(await codeAt(latest))) return null;
+  if (await codeAt(0n)) return 0n;
+
+  // Invariant: no code at `lo`, code at `hi`.
+  let lo = 0n;
+  let hi = latest;
+  while (lo + 1n < hi) {
+    const mid = (lo + hi) / 2n;
+    if (await codeAt(mid)) hi = mid;
+    else lo = mid;
+  }
+  return hi;
+}
 
 function classify(message: string): 'retryable' | 'range' | 'fatal' {
   // Word-bounded so a block number containing 429 is not read as a rate limit.
@@ -76,7 +130,54 @@ export async function scanOwner(options: ScanOptions): Promise<ChainIndex> {
   const maxAttempts = options.maxAttempts ?? 6;
 
   const latest = await client.getBlockNumber();
-  const start = options.fromBlock ?? 0n;
+  const configured = options.fromBlock ?? 0n;
+
+  const key = deployBlockCacheKey(options);
+  let deployment = key === null ? undefined : DEPLOY_BLOCK_CACHE.get(key);
+  if (deployment === undefined) {
+    let discovered: bigint | null;
+    try {
+      discovered = await findDeployBlock(client, options.registryAddress, latest);
+    } catch (error) {
+      fail({ code: 'RPC_UNAVAILABLE', detail: (error as Error).message });
+    }
+    if (discovered === null) {
+      fail({
+        code: 'REGISTRY_NOT_CONFIGURED',
+        address: options.registryAddress,
+        chainId: options.chainId ?? 0,
+      });
+    }
+    deployment = discovered;
+    if (key !== null) DEPLOY_BLOCK_CACHE.set(key, deployment);
+  }
+
+  // A configured start above head can only be stale or wrong. Returning an
+  // empty index would be indistinguishable from "no memories".
+  if (configured > latest) {
+    fail({
+      code: 'REGISTRY_NOT_CONFIGURED',
+      address: options.registryAddress,
+      chainId: options.chainId ?? 0,
+      detail: `configured start block ${configured} is above head ${latest}`,
+    });
+  }
+
+  // Hard floor: no commitment can predate the registry's code.
+  const start = configured > deployment ? configured : deployment;
+
+  // Only reachable when a cached deployment outlives a height regression
+  // (e.g. a restarted dev node behind a long-lived process). Scanning would be
+  // a silent no-op, so say what happened.
+  if (start > latest) {
+    fail({
+      code: 'REGISTRY_NOT_CONFIGURED',
+      address: options.registryAddress,
+      chainId: options.chainId ?? 0,
+      detail: `deployment block ${deployment} is above head ${latest}; the chain may have been reset`,
+    });
+  }
+
   let chunk = BigInt(options.chunk ?? 200);
 
   const byHash = new Map<`0x${string}`, IndexedCommitment>();
@@ -144,7 +245,7 @@ export async function scanOwner(options: ScanOptions): Promise<ChainIndex> {
         if (kind === 'fatal') {
           // A permanent failure must not disguise itself as a slow one.
           throw new Error(
-            `getLogs failed for blocks ${cursor}..${end} (cursor ${cursor}): ${message}`,
+            `getLogs failed for blocks ${cursor}..${end} (cursor ${cursor}): ${redactText(message)}`,
           );
         }
         if (kind === 'range' || attempt === 1) {
@@ -159,7 +260,7 @@ export async function scanOwner(options: ScanOptions): Promise<ChainIndex> {
         if (attempt >= maxAttempts) {
           throw new Error(
             `getLogs failed for blocks ${cursor}..${end} (cursor ${cursor}, chunk ${chunk}, ` +
-              `${attempt} attempts): ${message}`,
+              `${attempt} attempts): ${redactText(message)}`,
           );
         }
         // Backoff before the next attempt; the same window is retried at the
@@ -169,7 +270,7 @@ export async function scanOwner(options: ScanOptions): Promise<ChainIndex> {
     }
   }
 
-  return { byHash, order, scannedTo: latest };
+  return { byHash, order, scannedTo: latest, startBlock: start, requestedStartBlock: configured };
 }
 
 function decodeTag(bytes32: `0x${string}`): string {

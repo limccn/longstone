@@ -19,7 +19,23 @@ config  show or update configuration
 ```
 
 `verify` works with the gateway unreachable (`--direct`): chain state plus the
-content bytes are sufficient, by design.
+content bytes are sufficient, by design. Expected digests are **always** read
+from `getCommitment`; a gateway row can at most nominate a candidate hash.
+
+## Security status (0.1.0)
+
+The published 0.1.0 has two remote-mode vulnerabilities, fixed in the next
+release:
+
+- **H-1** a `build` returned every staged row for an owner, so a victim could
+  sign attacker-staged content. Fixed by client-side selection of the locally
+  computed commitment plus a gateway capability that scopes `build` (0.1.1).
+- **H-2** `verify --cid --owner` trusted gateway-supplied digests. Fixed by
+  reading every expected value from chain state (0.1.1).
+
+Until 0.1.1 is published, do not use `hisaishiMode=remote` against a shared
+gateway, and treat `verify` results as advisory. Embedded/local single-machine
+use is not affected by the remote prerequisites, but the fixes still apply.
 
 ## Requirements
 
@@ -54,7 +70,14 @@ node dist/cli.js config --set registryAddress=0xC85ed11d3065739F1829A114e420584b
 node dist/cli.js config --set hisaishiMode=embedded
 node dist/cli.js config --set hisaishiDbPath=.longstone/hisaishi.db
 node dist/cli.js config --set ipfsGateway=https://your-dedicated-gateway.example
+node dist/cli.js config --set scanStartBlock=48300000
 ```
+
+Remote endpoints (`rpcUrl`, `sequencerUrl`, `ipfsGateway`, `hisaishiBaseUrl`)
+must be `https://`; loopback `http://` is accepted for local development.
+`scanStartBlock` is an optional lower bound for chain scans: `0` (the default)
+discovers the registry deployment block, and the effective start is never
+earlier than that — no commitment can predate the registry's code.
 
 Environment overrides the file: `LONGSTONE_RPC_URL`,
 `LONGSTONE_REGISTRY_ADDRESS`. Keys come **only** from the environment:
@@ -106,20 +129,35 @@ raw revert string.
 
 1. Content is canonicalized with `@limccn/menhir-core` — the same code the contract,
    the browser and the seed script use.
-2. The keyless gateway stages it, recomputes both digests, and pins it.
-3. `build` returns commitments with **placeholders**: `prev = 0`,
-   `blockHeight = 0`, `signer = 0x0`.
-4. longstone overwrites all three, then signs locally and broadcasts.
-5. `confirm` makes **one** receipt call; longstone drives any retry.
+2. `put` generates a 128-bit staging capability and sends it to the gateway with
+   the content. The keyless gateway stages it, recomputes both digests, and pins it.
+3. `build` selects only rows staged under that capability and returns them with
+   **placeholders**: `prev = 0`, `blockHeight = 0`, `signer = 0x0`.
+4. longstone keeps only the commitment whose owner/contentHash/cidDigest match
+   the values it computed locally; it never signs whatever the gateway returned.
+5. longstone overwrites all three placeholders, then signs locally and broadcasts.
+6. `confirm` makes **one** receipt call; longstone drives any retry.
 
 A missed `signer` stamp reverts loudly (`SignerMismatch`). A missed
 `prev`/`blockHeight` would anchor wrong metadata silently, which is why
 stamping is one function with its own tests rather than three assignments.
 
+## Verify behaviour
+
+- `--commitment-hash` is the O(1) path: one `getCommitment` read.
+- `--cid --owner` uses the gateway's post-confirm `commitmentHash` as a
+  candidate, then re-reads the commitment from chain. If the candidate is
+  absent or not live, it falls back to an indexer scan starting at the registry
+  deployment block.
+- An unresolvable lookup is a typed `HASH_UNRESOLVED` error, never an empty
+  "not verified" report.
+- The report exposes the resolved commitment hash, the chain owner, and both
+  computed and expected digests.
+
 ## Tests
 
 ```powershell
-pnpm test          # 15 tests, incl. a full roundtrip against a real Hardhat node
+pnpm test          # 53 tests, incl. a full roundtrip against a real Hardhat node
 pnpm typecheck
 ```
 
@@ -129,8 +167,8 @@ private key appears in the test file**.
 
 ## Known limits (M1)
 
-- **hisaishi F2 is not implemented.** `hisaishiMode=remote` works against any
-  running gateway, but the Workers form does not exist yet.
+- **hisaishi F2 exists as a Workers deployment.** `hisaishiMode=remote` works
+  against it; the local F1 form remains the default for single-machine use.
 - **`hisaishiMode=local` (spawn a server) is not implemented** and fails with an
   explicit message rather than silently behaving like `embedded`.
 - Keys are env-only; encrypted keystore and content keys are M2.

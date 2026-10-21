@@ -19,8 +19,51 @@ export interface AclOptions {
   action: AclAction;
   owner: `0x${string}`;
   signer?: `0x${string}`;
-  roles?: Array<'commit' | 'retract'>;
+  /** Raw tokens from the CLI or MCP; validated at this boundary. */
+  roles?: readonly string[];
   ownerAccount?: PrivateKeyAccount;
+}
+
+const ROLE_TOKENS = new Set(['commit', 'retract']);
+
+/**
+ * Validate role tokens strictly.
+ *
+ * The CLI used to map any non-`commit` string to ROLE_RETRACT, so a typo, an
+ * uppercase token, or `--roles ""` granted retract. Trimming is accepted
+ * (shell quoting is noisy); case folding is not, because the MCP surface uses
+ * `z.enum` and the two transports must agree.
+ *
+ * An absent list on `grant` keeps the documented `commit` default. An
+ * explicitly empty or partially invalid list is an error, never a silent
+ * revoke.
+ */
+export function normalizeRoles(
+  input: readonly string[] | undefined,
+  action: AclAction,
+): Array<'commit' | 'retract'> {
+  if (action === 'revoke') return [];
+  if (input === undefined) return ['commit'];
+
+  const roles: Array<'commit' | 'retract'> = [];
+  for (const raw of input) {
+    const token = raw.trim();
+    if (!ROLE_TOKENS.has(token)) {
+      fail({
+        code: 'SCHEMA_VIOLATION',
+        detail: `invalid role ${JSON.stringify(raw)}; expected "commit" or "retract"`,
+      });
+    }
+    const role = token as 'commit' | 'retract';
+    if (!roles.includes(role)) roles.push(role);
+  }
+  if (roles.length === 0) {
+    fail({
+      code: 'SCHEMA_VIOLATION',
+      detail: 'grant requires at least one role ("commit" or "retract")',
+    });
+  }
+  return roles;
 }
 
 export interface AclResult {
@@ -52,7 +95,7 @@ export async function acl(deps: { registry: RegistryClient }, options: AclOption
   const mask =
     options.action === 'revoke'
       ? 0
-      : (options.roles ?? ['commit']).reduce(
+      : normalizeRoles(options.roles, options.action).reduce(
           (acc, role) => acc | (role === 'commit' ? ROLE_COMMIT : ROLE_RETRACT),
           0,
         );

@@ -6,6 +6,8 @@
  * branch on `code` alone; the human text is secondary.
  */
 
+import { redactText } from './redact.js';
+
 export type LongstoneError =
   // @limccn/menhir-core pass-through; `detail` carries the core message when there is
   // one, because "SCHEMA_VIOLATION" alone does not tell a caller what to fix.
@@ -20,6 +22,13 @@ export type LongstoneError =
   | { code: 'DUPLICATE_COMMITMENT' }
   | { code: 'UNKNOWN_COMMITMENT' }
   | { code: 'INVALID_BATCH_SIZE' | 'INVALID_ROLES' | 'INVALID_COMMITMENT' | 'INVALID_OP' | 'FUTURE_BLOCK_HEIGHT' }
+  // local trust-boundary failures
+  | { code: 'STAGED_ROW_MISSING'; owner: string; contentHash: string }
+  | { code: 'AMBIGUOUS_BATCH_ROW'; contentHash: string; count: number }
+  | { code: 'HASH_UNRESOLVED'; detail: string }
+  | { code: 'OWNER_MISMATCH'; expected: string; actual: string }
+  | { code: 'REGISTRY_NOT_CONFIGURED'; address: string; chainId: number; detail?: string }
+  | { code: 'INSECURE_ENDPOINT'; field: string; detail: string }
   // gateway transport / business
   | { code: 'GATE_UNREACHABLE' | 'GATE_REJECTED'; gateCode?: string; detail?: string }
   | { code: 'UNKNOWN_REVERT'; selector: `0x${string}` }
@@ -59,6 +68,28 @@ export function describe(error: LongstoneError): string {
       );
     case 'PREDECESSOR_UNKNOWN':
       return `${error.which} references a commitment that does not exist on chain`;
+    case 'STAGED_ROW_MISSING':
+      return (
+        `no built commitment matches the locally computed content ` +
+        `(owner ${error.owner}, contentHash ${error.contentHash}). ` +
+        'The gateway did not include the row this client staged; nothing was signed.'
+      );
+    case 'AMBIGUOUS_BATCH_ROW':
+      return (
+        `the gateway returned ${error.count} commitments for contentHash ` +
+        `${error.contentHash}; refusing to choose which one to sign`
+      );
+    case 'HASH_UNRESOLVED':
+      return `could not resolve a chain commitment: ${error.detail}`;
+    case 'OWNER_MISMATCH':
+      return `the commitment owner is ${error.actual}, not the requested ${error.expected}`;
+    case 'REGISTRY_NOT_CONFIGURED':
+      return error.detail !== undefined
+        ? `${error.detail} (registry ${error.address}, chain ${error.chainId})`
+        : `no contract code at ${error.address} on chain ${error.chainId}; ` +
+            'check registryAddress and rpcUrl before scanning';
+    case 'INSECURE_ENDPOINT':
+      return `insecure remote endpoint in ${error.field}: ${error.detail}`;
     case 'GATE_REJECTED':
       return `gateway rejected the request${error.gateCode === undefined ? '' : ` (${error.gateCode})`}${error.detail === undefined ? '' : `: ${error.detail}`}`;
     case 'GATE_UNREACHABLE':
@@ -81,7 +112,17 @@ export function describe(error: LongstoneError): string {
 }
 
 export function fail(error: LongstoneError): never {
-  throw new LongstoneFailure(error);
+  // One choke point for every typed failure: a transport message can embed a
+  // credential-bearing URL, and this object is serialized to stderr and to MCP
+  // results unchanged.
+  throw new LongstoneFailure(redactError(error));
+}
+
+function redactError(error: LongstoneError): LongstoneError {
+  if ('detail' in error && typeof error.detail === 'string') {
+    return { ...error, detail: redactText(error.detail) };
+  }
+  return error;
 }
 
 /** Map a decoded viem custom error name onto the union. */

@@ -16,6 +16,7 @@ import { stageStatus } from './commands/stage-status.js';
 import { verify } from './commands/verify.js';
 import { loadConfig, saveConfig, type LongstoneConfig } from './config.js';
 import { LongstoneFailure, describe } from './errors.js';
+import { redactText } from './redact.js';
 import { pickSigningAccount, warnThrowawayKey } from './keybox.js';
 import { createContext } from './context.js';
 
@@ -49,7 +50,7 @@ function handleError(error: unknown): never {
     process.stderr.write(`${describe(error.error)}\n`);
     process.exitCode = 1;
   } else {
-    process.stderr.write(`${(error as Error).message}\n`);
+    process.stderr.write(`${redactText((error as Error).message)}\n`);
     process.exitCode = 1;
   }
   throw error;
@@ -113,7 +114,7 @@ program
 
 program
   .command('verify')
-  .description('verify content bytes against a commitment (dual digest)')
+  .description('verify content bytes against a chain commitment (dual digest)')
   .requiredOption('--cid <cid>')
   .option('--commitment-hash <hash>')
   .option('--owner <address>')
@@ -178,7 +179,9 @@ aclCommand
             action: 'grant',
             owner: options.owner,
             signer: options.signer,
-            roles: (options.roles ?? ['commit']) as Array<'commit' | 'retract'>,
+            ...(options.roles === undefined
+              ? {}
+              : { roles: options.roles as string[] }),
             ownerAccount: ctx.keys!.owner!,
           },
         ),
@@ -293,6 +296,9 @@ program
             break;
           case 'scanChunkBlocks':
             next.scanChunkBlocks = Number(value);
+            break;
+          case 'scanStartBlock':
+            next.scanStartBlock = Number(value);
             break;
           default:
             throw new Error(`unknown config key: ${key}`);

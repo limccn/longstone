@@ -6,7 +6,7 @@
  * from landing in one and not the other.
  */
 
-export { acl, ROLE_COMMIT, ROLE_RETRACT } from './acl.js';
+export { acl, normalizeRoles, ROLE_COMMIT, ROLE_RETRACT } from './acl.js';
 export { get } from './get.js';
 export { put } from './put.js';
 export { retract } from './retract.js';

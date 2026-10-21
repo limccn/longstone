@@ -74,7 +74,9 @@ export async function createContext(options: ContextOptions): Promise<CommandCon
         registryAddress: config.registryAddress,
         owner,
         rpcUrl: config.rpcUrl,
+        chainId: config.chainId,
         chunk: config.scanChunkBlocks,
+        ...(config.scanStartBlock > 0 ? { fromBlock: BigInt(config.scanStartBlock) } : {}),
       }),
     close,
   };

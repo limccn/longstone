@@ -56,8 +56,10 @@ export interface GateClient {
     content: unknown;
     contentHash: `0x${string}`;
     tags: string[];
+    /** 128-bit staging-session token, generated locally (opaque to us). */
+    capability: string;
   }): Promise<StagedResponse>;
-  build(input: { owner: `0x${string}`; limit?: number }): Promise<BuiltResponse>;
+  build(input: { owner: `0x${string}`; capability: string; limit?: number }): Promise<BuiltResponse>;
   confirm(input: { owner: `0x${string}`; txHash: `0x${string}` }): Promise<ConfirmOutcome>;
   list(input: { owner: `0x${string}`; status?: string; limit?: number }): Promise<MemoryRowResponse[]>;
   fetchContent(cid: string): Promise<Uint8Array>;

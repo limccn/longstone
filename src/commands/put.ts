@@ -5,9 +5,12 @@
  * Steps 5b (stamp) and 6 (sign) are the ones that cannot move anywhere else.
  */
 
+import { randomBytes } from 'node:crypto';
+
 import { canonicalBytes, cidDigest, contentHash, parseMemoryContent } from '@limccn/menhir-core';
 import type { PrivateKeyAccount } from 'viem/accounts';
 
+import { selectLocalCommitments } from '../batch.js';
 import type { LongstoneConfig } from '../config.js';
 import type { GateClient } from '../gate.js';
 import type { RegistryClient } from '../registry.js';
@@ -49,21 +52,35 @@ export async function put(deps: PutDeps, options: PutOptions): Promise<PutResult
   const hash = contentHash(content);
   const digest = cidDigest(canonicalBytes(content));
 
+  // A 128-bit session token for this staging call, generated locally. The
+  // gateway binds the row to it (scoped to its deployment) and only a build
+  // presenting it can select the row. It is never logged or persisted.
+  const capability = randomBytes(16).toString('hex');
+
   // 3. stage (integrity gate recomputes server-side; no pin or row on mismatch).
   const staged = await gate.stage({
     owner: options.owner,
     content,
     contentHash: hash,
     tags: options.tags ?? [],
+    capability,
   });
 
-  // 4. digest is computed locally, never taken from the backend (D-9).
-  void digest;
+  // 4. digest is computed locally, never taken from the backend (D-9); it is
+  //    part of the intent used to select what may be signed.
+  // 5. build the batch for this capability.
+  const built = await gate.build({ owner: options.owner, capability });
 
-  // 5. build a batch from staged rows.
-  const built = await gate.build({ owner: options.owner });
+  // 5a. Select ONLY the commitment this client computed. The gateway may have
+  //     returned rows for other actors (or reordered/dropped ours); signing
+  //     anything else is the H-1 cross-tenant injection.
+  const selection = selectLocalCommitments(built, [
+    { owner: options.owner, contentHash: hash, cidDigest: digest },
+  ]);
+  const selected = selection[0];
+  if (selected === undefined) fail({ code: 'INVALID_BATCH_SIZE' });
 
-  // 5b. stamp ALL THREE placeholders before signing. A missed signer reverts;
+  // 5b. stamp THE selected commitment before signing. A missed signer reverts;
   //     a missed prev/blockHeight would anchor wrong metadata silently.
   const blockHeight = await registry.blockNumber();
   const prev = options.prev ?? ZERO32;
@@ -76,28 +93,15 @@ export async function put(deps: PutDeps, options: PutOptions): Promise<PutResult
     }
   }
 
-  const stamped = stampCommitments(built.commitments, {
+  const stamped = stampCommitments([selected.commitment], {
     signer: options.account.address,
     blockHeight,
     prev,
   });
 
-  // The tag list must line up with the stamped commitments; the gateway built
-  // both from the same staged rows, so a mismatch means someone reordered one.
-  const tagLists = built.tagLists;
-  if (stamped.length !== tagLists.length) {
-    fail({ code: 'INVALID_BATCH_SIZE' });
-  }
-  // Tags arrive ALREADY encoded as bytes32: the gateway built `tagLists` from
-  // the same staged rows and applied `tagToBytes32` there. Re-encoding would
-  // treat a 66-character hex string as a tag and blow the 32-byte limit.
-  for (const list of tagLists) {
-    for (const tag of list) {
-      if (!/^0x[0-9a-fA-F]{64}$/.test(tag)) {
-        fail({ code: 'SCHEMA_VIOLATION', detail: `tag ${tag} is not bytes32` });
-      }
-    }
-  }
+  // The tag list must line up with the stamped commitment; batch selection
+  // already validated the bytes32 shape and kept the pairing by index.
+  const tagLists = [selected.tags];
 
   // 6–7. sign locally and broadcast to the sequencer.
   const txHash = await registry.commitBatch(stamped, tagLists, options.account);
@@ -114,8 +118,8 @@ export async function put(deps: PutDeps, options: PutOptions): Promise<PutResult
 
   return {
     cid: staged.cid,
-    // The hash of the STAMPED struct — the one that actually anchored, not the
-    // gateway's placeholder-derived value.
+    // The hash of the STAMPED struct — the one that actually anchored, and the
+    // one selected from the local intent, not `stamped[0]` of a gateway batch.
     commitmentHash: commitmentHash(first),
     txHash,
     confirmed: outcome.status === 'anchored' && receipt.status === 'success',

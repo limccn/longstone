@@ -18,6 +18,7 @@ import { retract } from './commands/retract.js';
 import { stageStatus } from './commands/stage-status.js';
 import { verify } from './commands/verify.js';
 import { LongstoneFailure } from './errors.js';
+import { redactText } from './redact.js';
 import { pickSigningAccount } from './keybox.js';
 import { createContext } from './context.js';
 import { loadConfig } from './config.js';
@@ -37,7 +38,7 @@ function toolError(error: unknown) {
   const message =
     error instanceof LongstoneFailure
       ? JSON.stringify(error.error)
-      : JSON.stringify({ code: 'UNKNOWN_ERROR', detail: (error as Error).message });
+      : JSON.stringify({ code: 'UNKNOWN_ERROR', detail: redactText((error as Error).message) });
   return { isError: true as const, content: [{ type: 'text' as const, text: message }] };
 }
 
@@ -123,7 +124,7 @@ export function createMcpServer(): McpServer {
     'memory_verify',
     {
       description:
-        'Fetch bytes and verify both digests against a commitment. Works with the gateway unreachable when direct=true.',
+        'Fetch bytes and verify both digests against a chain commitment. Expected digests are read from the registry; a gateway row only supplies a candidate hash. Works with the gateway unreachable when direct=true.',
       inputSchema: {
         cid: z.string().min(1),
         commitmentHash: BYTES32.optional(),

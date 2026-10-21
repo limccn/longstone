@@ -1,15 +1,21 @@
 /**
- * `verify` — dual-fetch, dual-digest (design v0.2 §4, D3).
+ * `verify` — dual-fetch, dual-digest, chain-only expected values (design §2.2).
  *
- * `--direct` is an acceptance criterion, not a nicety: verification must work
- * with the gateway unreachable, because the whole claim is that the chain plus
- * the bytes are sufficient.
+ * Resolution and comparison are separate steps:
+ *
+ *   resolve H  ← explicit | gateway row's post-confirm hash | indexer
+ *   compare    ← `getCommitment(H)` only. Nothing returned by the gateway is
+ *                ever used as an expected value.
+ *
+ * `--direct` is an acceptance criterion: verification must work with the
+ * gateway unreachable, because the claim is that chain state plus the bytes
+ * are sufficient.
  */
 
 import { buildGatewayUrl } from '@limccn/hisaishi-gateway';
 import { cidDigest, contentHash, parseMemoryContent } from '@limccn/menhir-core';
 
-import type { GateClient, MemoryRowResponse } from '../gate.js';
+import type { GateClient } from '../gate.js';
 import type { RegistryClient } from '../registry.js';
 import type { ChainIndex } from '../indexer.js';
 import { fail } from '../errors.js';
@@ -27,13 +33,24 @@ export interface VerifyOptions {
 export interface VerifyReport {
   hashMatch: boolean;
   digestMatch: boolean;
+  /** deep on chain AND both digests match — "these bytes are anchored". */
   anchored: boolean;
+  /** active on chain AND both digests match. */
   active: boolean;
   blockHeight: string | null;
-  /** Which commitment hash the verdict was computed against, and where it came from. */
-  hashSource: 'explicit' | 'gate-row' | 'indexer' | 'none';
-  contentHash: `0x${string}` | null;
-  cidDigest: `0x${string}` | null;
+  /** Where the resolved hash came from; values are always read from chain. */
+  hashSource: 'explicit' | 'gateway' | 'indexer';
+  commitmentHash: `0x${string}`;
+  owner: `0x${string}`;
+  /** Expected values, read from `getCommitment(H)`. */
+  contentHash: `0x${string}`;
+  cidDigest: `0x${string}`;
+  /** Values recomputed over the fetched bytes. */
+  computedContentHash: `0x${string}`;
+  computedCidDigest: `0x${string}`;
+  /** Raw chain state for the resolved commitment (diagnostics). */
+  chainDeep: boolean;
+  chainActive: boolean;
 }
 
 export interface VerifyDeps {
@@ -46,8 +63,7 @@ export interface VerifyDeps {
  * Fetch from the configured dedicated gateway without touching hisaishi.
  *
  * Uses the shared `/ipfs/<cid>` builder: Pinata's gateways answer 400 for a
- * bare `/<cid>`, which is exactly what this path did before the fix — the
- * gateway proxy had been corrected but this second URL builder was missed.
+ * bare `/<cid>`.
  */
 function fetchDirect(gateway: string, cid: string): Promise<Uint8Array> {
   const url = buildGatewayUrl(gateway, cid);
@@ -70,6 +86,73 @@ function fetchDirect(gateway: string, cid: string): Promise<Uint8Array> {
   });
 }
 
+interface Resolved {
+  hash: `0x${string}`;
+  source: VerifyReport['hashSource'];
+}
+
+/**
+ * Resolve a candidate commitment hash. The gateway may only nominate a hash;
+ * it never supplies a value that is compared. A gateway candidate that is not
+ * a live chain commitment, or that belongs to another owner, is discarded in
+ * favour of the indexer — a lying gateway can cost availability, never truth.
+ */
+async function resolve(
+  deps: VerifyDeps,
+  options: VerifyOptions,
+  computedCidDigest: `0x${string}`,
+): Promise<Resolved> {
+  if (options.commitmentHash !== undefined) {
+    return { hash: options.commitmentHash, source: 'explicit' };
+  }
+
+  if (options.direct !== true && options.owner !== undefined) {
+    let candidate: `0x${string}` | null = null;
+    try {
+      const rows = await deps.gate.list({ owner: options.owner, limit: 200 });
+      // Match on the content-derived digest, never on the caller-supplied CID.
+      const row = rows.find(
+        (entry) =>
+          entry.commitmentHash !== null &&
+          entry.cidDigest.toLowerCase() === computedCidDigest.toLowerCase(),
+      );
+      candidate = row?.commitmentHash ?? null;
+    } catch {
+      // Gateway down: fall through to the indexer. Verification does not
+      // depend on the gateway's availability.
+    }
+
+    if (candidate !== null) {
+      const commitment = await deps.registry.getCommitment(candidate);
+      const live = await deps.registry.isDeep(candidate);
+      const ownerOk =
+        options.owner === undefined ||
+        commitment.owner.toLowerCase() === options.owner.toLowerCase();
+      if (live && ownerOk) return { hash: candidate, source: 'gateway' };
+      // A stale/forged candidate is not a verdict; fall back to chain events.
+    }
+  }
+
+  if (options.owner !== undefined && deps.scan !== undefined) {
+    const index = await deps.scan(options.owner);
+    const hit = index.order.find((hash) => {
+      const entry = index.byHash.get(hash);
+      return (
+        entry !== undefined &&
+        entry.commitment.cidDigest.toLowerCase() === computedCidDigest.toLowerCase()
+      );
+    });
+    if (hit !== undefined) return { hash: hit, source: 'indexer' };
+  }
+
+  fail({
+    code: 'HASH_UNRESOLVED',
+    detail:
+      'pass --commitment-hash, or --owner with an anchored commitment that ' +
+      'matches these bytes (the indexer scan starts at the registry deployment block)',
+  });
+}
+
 export async function verify(deps: VerifyDeps, options: VerifyOptions): Promise<VerifyReport> {
   const { gate, registry } = deps;
 
@@ -79,103 +162,63 @@ export async function verify(deps: VerifyDeps, options: VerifyOptions): Promise<
     fail({ code: 'SCHEMA_VIOLATION' });
   }
   const cid = options.cid;
-  const bytes = options.direct === true
-    ? await fetchDirect(options.ipfsGateway ?? '', cid)
-    : await gate.fetchContent(cid);
+  const bytes =
+    options.direct === true
+      ? await fetchDirect(options.ipfsGateway ?? '', cid)
+      : await gate.fetchContent(cid);
 
   const computedContentHash = contentHash(parseMemoryContent(decodeContent(bytes)));
   const computedCidDigest = cidDigest(bytes);
 
-  // 2. resolve the commitment. An explicit hash wins; otherwise the gateway's
-  //    row (R13) is the lookup aid; otherwise the indexer matches by cidDigest.
-  let commitmentHashValue: `0x${string}` | null = options.commitmentHash ?? null;
-  let hashSource: VerifyReport['hashSource'] = commitmentHashValue === null ? 'none' : 'explicit';
-  let expectedContentHash: `0x${string}` | null = null;
-  let expectedCidDigest: `0x${string}` | null = null;
+  // 2. resolve the commitment hash (explicit → gateway candidate → indexer).
+  const resolved = await resolve(deps, options, computedCidDigest);
 
-  if (commitmentHashValue !== null) {
-    const commitment = await registry.getCommitment(commitmentHashValue);
-    expectedContentHash = commitment.contentHash;
-    expectedCidDigest = commitment.cidDigest;
-  } else if (options.owner !== undefined) {
-    // `--direct` must not touch the gateway at all (PRD AC). Resolving through
-    // the indexer first keeps that promise; the gateway's list route is only a
-    // convenience path when the caller explicitly wants it.
-    if (options.direct === true) {
-      if (deps.scan !== undefined) {
-        const index = await deps.scan(options.owner);
-        const hit = index.order.find((h) => {
-          const entry = index.byHash.get(h);
-          return entry !== undefined && entry.commitment.cidDigest === computedCidDigest;
-        });
-        if (hit !== undefined) {
-          const entry = index.byHash.get(hit)!;
-          commitmentHashValue = hit;
-          expectedContentHash = entry.commitment.contentHash;
-          expectedCidDigest = entry.commitment.cidDigest;
-          hashSource = 'indexer';
-        }
-      }
-    } else {
-      const rows: MemoryRowResponse[] = await gate.list({ owner: options.owner, limit: 200 });
-      const matching = rows.find((row) => row.cid === cid || row.cidDigest === computedCidDigest);
-      if (matching !== undefined) {
-        commitmentHashValue = matching.commitmentHash;
-        expectedContentHash = matching.contentHash;
-        expectedCidDigest = matching.cidDigest;
-        hashSource = 'gate-row';
-        // A null derived hash means the row is not yet batched; the digests are
-        // still comparable, and `anchored` below reports the truth.
-        if (matching.commitmentHash === null) commitmentHashValue = null;
-      } else if (deps.scan !== undefined) {
-        const index = await deps.scan(options.owner);
-        const hit = index.order.find((h) => {
-          const entry = index.byHash.get(h);
-          return entry !== undefined && entry.commitment.cidDigest === computedCidDigest;
-        });
-        if (hit !== undefined) {
-          const entry = index.byHash.get(hit)!;
-          commitmentHashValue = hit;
-          expectedContentHash = entry.commitment.contentHash;
-          expectedCidDigest = entry.commitment.cidDigest;
-          hashSource = 'indexer';
-        }
-      }
-    }
+  // 3–4. every expected value comes from the chain.
+  const commitment = await registry.getCommitment(resolved.hash);
+  const chainDeep = await registry.isDeep(resolved.hash);
+  const chainActive = await registry.isActive(resolved.hash);
+
+  if (!chainDeep) {
+    fail({
+      code: 'HASH_UNRESOLVED',
+      detail: `commitment ${resolved.hash} is not on chain`,
+    });
+  }
+  if (
+    options.owner !== undefined &&
+    commitment.owner.toLowerCase() !== options.owner.toLowerCase()
+  ) {
+    fail({
+      code: 'OWNER_MISMATCH',
+      expected: options.owner,
+      actual: commitment.owner,
+    });
   }
 
-  // 3–4. both roots over the same fetched bytes.
-  const hashMatch = expectedContentHash !== null && expectedContentHash === computedContentHash;
-  const digestMatch = expectedCidDigest !== null && expectedCidDigest === computedCidDigest;
-
-  // 5. on-chain state, only if we have a hash to ask about.
-  let anchored = false;
-  let active = false;
-  let blockHeight: string | null = null;
-  if (commitmentHashValue !== null) {
-    anchored = await registry.isDeep(commitmentHashValue);
-    active = await registry.isActive(commitmentHashValue);
-    const commitment = await registry.getCommitment(commitmentHashValue);
-    blockHeight = commitment.blockHeight.toString();
-  }
+  const expectedContentHash = commitment.contentHash;
+  const expectedCidDigest = commitment.cidDigest;
+  const hashMatch = expectedContentHash.toLowerCase() === computedContentHash.toLowerCase();
+  const digestMatch = expectedCidDigest.toLowerCase() === computedCidDigest.toLowerCase();
 
   return {
     hashMatch,
     digestMatch,
-    anchored,
-    active,
-    blockHeight,
-    hashSource,
+    // "Anchored" describes these bytes, not merely the existence of a hash.
+    anchored: chainDeep && hashMatch && digestMatch,
+    active: chainActive && hashMatch && digestMatch,
+    blockHeight: commitment.blockHeight.toString(),
+    hashSource: resolved.source,
+    commitmentHash: resolved.hash,
+    owner: commitment.owner,
     contentHash: expectedContentHash,
     cidDigest: expectedCidDigest,
+    computedContentHash,
+    computedCidDigest,
+    chainDeep,
+    chainActive,
   };
 }
 
-/**
- * The pinned bytes are the canonical JSON of a MemoryContent. Decoding them is
- * how a verify report can recompute `contentHash` from fetched bytes rather
- * than trusting the gateway's metadata.
- */
 function decodeContent(bytes: Uint8Array): unknown {
   try {
     return JSON.parse(new TextDecoder().decode(bytes));
