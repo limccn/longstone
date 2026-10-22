@@ -1,0 +1,53 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.limccn/longstone",
+  "description": "Sovereign agent-memory MCP server: sign locally and anchor memories on an Ethereum testnet.",
+  "repository": {
+    "url": "https://github.com/limccn/longstone",
+    "source": "github"
+  },
+  "version": "0.1.1",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "@limccn/longstone",
+      "version": "0.1.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "serve"
+        }
+      ],
+      "environmentVariables": [
+        {
+          "name": "LONGSTONE_KEY",
+          "description": "Delegated testnet signing key. Never a mainnet or owner key.",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "LONGSTONE_OWNER_KEY",
+          "description": "Owner key used only for ACL changes and retract-any.",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "LONGSTONE_RPC_URL",
+          "description": "JSON-RPC endpoint for the registry chain.",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "LONGSTONE_REGISTRY_ADDRESS",
+          "description": "MemoryRegistry contract address.",
+          "isRequired": false,
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}
