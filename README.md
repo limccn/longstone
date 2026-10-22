@@ -150,6 +150,19 @@ memory.
 `memory_put` is additive rather than destructive (`destructiveHint: false`), but
 it still spends gas.
 
+## Agent and IDE surfaces
+
+| Surface | Entry point |
+|---|---|
+| GitHub Copilot (VS Code, Copilot CLI, github.com) | [`examples/copilot/README.md`](./examples/copilot/README.md) — the exact file for each host, its key channel, and a launch smoke test |
+| Agent Skills hosts | [`skills/longstone/README.md`](./skills/longstone/README.md) — `npx skills add limccn/longstone --skill longstone` |
+| DeepSeek Harness | [`dsh/README.md`](./dsh/README.md) — the `@limccn/longstone-dsh` Cordis bundle |
+| MCP Registry | [`server.json`](./server.json) — validated by `.github/workflows/mcp-registry.yml` |
+
+None of these files carries a key value. The Copilot examples live under
+`examples/` on purpose: a config committed at a repository root is executed when
+a host opens the project, so it must be reviewed like code.
+
 ## How the write path works
 
 1. Content is canonicalized with `@limccn/menhir-core` — the same code the contract,

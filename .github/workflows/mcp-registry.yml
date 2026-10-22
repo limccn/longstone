@@ -1,0 +1,52 @@
+name: mcp-registry
+
+# `server.json` is the MCP Registry entry for @limccn/longstone. Validate it on
+# demand; publishing is deliberately not automated. A registry entry can only
+# be published after the matching npm version exists, and it needs GitHub
+# authentication, so it is an owner action (see the commented block below).
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      MCP_PUBLISHER_VERSION: v1.8.1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mcp-publisher
+        run: |
+          set -euo pipefail
+          base="https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}"
+          asset="mcp-publisher_linux_amd64.tar.gz"
+          curl -fsSL "$base/$asset" -o "/tmp/$asset"
+          # Verify against the release checksums before executing the binary.
+          curl -fsSL "$base/registry_${MCP_PUBLISHER_VERSION#v}_checksums.txt" \
+            -o /tmp/mcp-publisher-checksums.txt
+          (cd /tmp && grep " ${asset}$" mcp-publisher-checksums.txt | sha256sum -c -)
+          tar -xzf "/tmp/$asset" -C /tmp mcp-publisher
+          sudo install -m 0755 /tmp/mcp-publisher /usr/local/bin/mcp-publisher
+          mcp-publisher --help > /dev/null
+          echo "mcp-publisher ${MCP_PUBLISHER_VERSION} installed (checksum verified)"
+
+      - name: Validate server.json
+        run: mcp-publisher validate ./server.json
+
+      # ── Owner-only publishing (manual) ──────────────────────────────────
+      # Do not enable this on a tag, push, or schedule. Prerequisites:
+      #   1. the exact version in server.json is published to npm;
+      #   2. the owner has GitHub auth for the `io.github.limccn` namespace.
+      # `mcp-publisher login github` opens a browser; in CI use a PAT that is
+      # authorized for the namespace, supplied as a repository secret.
+      #
+      # - name: Publish to the MCP Registry
+      #   env:
+      #     MCP_PUBLISHER_GITHUB_TOKEN: ${{ secrets.MCP_PUBLISHER_GITHUB_TOKEN }}
+      #   run: |
+      #     mcp-publisher login github --token="$MCP_PUBLISHER_GITHUB_TOKEN"
+      #     mcp-publisher publish ./server.json

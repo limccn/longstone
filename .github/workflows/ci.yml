@@ -58,3 +58,21 @@ jobs:
         working-directory: workspace
       - run: pnpm --filter longstone typecheck
         working-directory: workspace
+
+  # The Copilot examples launch the PUBLISHED package through `npx`, so this
+  # job needs no workspace and no pnpm install. Windows is mandatory: `npx`
+  # there is `npx.cmd`, and a host that spawns it without a shell fails with
+  # ENOENT rather than a useful error.
+  copilot-smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Smoke-test the Copilot MCP configs against the published package
+        run: node examples/copilot/smoke.mjs

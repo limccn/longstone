@@ -1,0 +1,101 @@
+name: skill
+
+# A skill is executable guidance distributed to agent hosts. This job validates
+# the open-format frontmatter and the no-key-material rule, proves the official
+# installer discovers `longstone` from this repository, and proves a `--copy`
+# install lands in a fresh project.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: skill-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Validate SKILL.md and references
+        run: node scripts/validate-skill.mjs
+
+      - name: Discover the skill with the official installer
+        run: |
+          set -euo pipefail
+          # skills@1.7.4 rejects `--list --json` (the flags are mutually
+          # exclusive), so discovery is asserted on the human-readable list.
+          # Strip ANSI and ignore the "Source: …" line, because the checkout
+          # path itself ends in "longstone" and would satisfy a bare match.
+          npx --yes skills@1.7.4 add . --skill longstone --list -y > "$RUNNER_TEMP/skills-list.txt" 2>&1
+          cat "$RUNNER_TEMP/skills-list.txt"
+          node -e '
+            const fs = require("node:fs");
+            const text = fs
+              .readFileSync(process.argv[1], "utf8")
+              .replace(/\u001b\[[0-9;?]*[A-Za-z]/g, "");
+            // Drop the "Source: …" line: the checkout path itself ends in
+            // "longstone", so a bare substring check would pass even if
+            // discovery found nothing.
+            const lines = text
+              .split(/\r?\n/)
+              .filter((line) => !line.includes("Source:"));
+            if (!lines.some((line) => line.includes("longstone"))) {
+              console.error("skills --list did not print the longstone skill");
+              process.exit(1);
+            }
+            console.log("discovered: longstone");
+          ' "$RUNNER_TEMP/skills-list.txt"
+
+      - name: Install into a fresh project in copy mode
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d)"
+          cd "$work"
+          # `$GITHUB_WORKSPACE` is the source; `.` here would be the empty temp
+          # dir. --json gives a machine-readable result to assert on.
+          npx --yes skills@1.7.4 add "$GITHUB_WORKSPACE" --skill longstone \
+            -y -a claude-code --copy --json > "$RUNNER_TEMP/skills-install.json"
+          cat "$RUNNER_TEMP/skills-install.json"
+          test -f "$work/.claude/skills/longstone/SKILL.md"
+          test -f "$work/.claude/skills/longstone/references/commands.md"
+          node -e '
+            const fs = require("node:fs");
+            const results = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+            const entry = results.find(
+              (item) => item.name === "longstone" && item.status === "installed" && item.mode === "copy",
+            );
+            if (!entry || !entry.hash) {
+              console.error("skills install did not report an installed longstone copy");
+              process.exit(1);
+            }
+            const skill = entry.path + "/SKILL.md";
+            if (!fs.existsSync(skill)) {
+              console.error("installed SKILL.md is missing at " + skill);
+              process.exit(1);
+            }
+            const lock = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+            const locked = lock.skills && lock.skills.longstone;
+            if (!locked || locked.computedHash !== entry.hash) {
+              console.error("skills-lock.json does not match the installed content hash");
+              process.exit(1);
+            }
+            console.log("installed: longstone", entry.hash, skill);
+          ' "$RUNNER_TEMP/skills-install.json" "$work/skills-lock.json"

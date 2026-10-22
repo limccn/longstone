@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "longstone": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@limccn/longstone@0.1.1", "serve"]
+    }
+  }
+}

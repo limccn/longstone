@@ -1,0 +1,25 @@
+name: dsh-plugin
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Runs only the dependency-free bundle checks. The manual proof against the
+# real harness is intentionally not run here because `@deepseek-ai/dsh` is a
+# preview dependency. To reproduce it locally:
+#
+#   dsh plugin --profile demo add ./dsh          # or: add @limccn/longstone-dsh
+#   dsh --profile demo --dump-config             # shows the longstone-memory row
+#   # boot the profile: tools appear as mcp__longstone__*
+#   # without LONGSTONE_KEY: profile boots with no tools (failOnStartupError: false)
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Bundle checks
+        run: node dsh/test.mjs

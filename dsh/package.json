@@ -1,0 +1,32 @@
+{
+  "name": "@limccn/longstone-dsh",
+  "version": "0.1.0",
+  "private": false,
+  "description": "DeepSeek Harness bundle that wires longstone's MCP memory server into a DSH profile.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/limccn/longstone.git"
+  },
+  "homepage": "https://github.com/limccn/longstone",
+  "bugs": {
+    "url": "https://github.com/limccn/longstone/issues"
+  },
+  "type": "module",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "files": [
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "node test.mjs"
+  }
+}

@@ -1,0 +1,10 @@
+- insert:
+    - id: longstone-memory
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: longstone
+        transport: stdio
+        command: npx
+        args: ['-y', '@limccn/longstone@0.1.1', 'serve']
+        toolCallTimeoutMs: 120000
+        failOnStartupError: false
