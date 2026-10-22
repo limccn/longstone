@@ -43,7 +43,7 @@ function toolError(error: unknown) {
 }
 
 export function createMcpServer(): McpServer {
-  const server = new McpServer({ name: 'longstone', version: '0.1.0' });
+  const server = new McpServer({ name: 'longstone', version: '0.1.1' });
 
   server.registerTool(
     'memory_put',

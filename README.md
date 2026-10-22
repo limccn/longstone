@@ -22,10 +22,9 @@ config  show or update configuration
 content bytes are sufficient, by design. Expected digests are **always** read
 from `getCommitment`; a gateway row can at most nominate a candidate hash.
 
-## Security status (0.1.0)
+## Security status (0.1.0 → 0.1.1)
 
-The published 0.1.0 has two remote-mode vulnerabilities, fixed in the next
-release:
+The published 0.1.0 has two remote-mode vulnerabilities, fixed in 0.1.1:
 
 - **H-1** a `build` returned every staged row for an owner, so a victim could
   sign attacker-staged content. Fixed by client-side selection of the locally
@@ -33,7 +32,7 @@ release:
 - **H-2** `verify --cid --owner` trusted gateway-supplied digests. Fixed by
   reading every expected value from chain state (0.1.1).
 
-Until 0.1.1 is published, do not use `hisaishiMode=remote` against a shared
+If you are still on 0.1.0, do not use `hisaishiMode=remote` against a shared
 gateway, and treat `verify` results as advisory. Embedded/local single-machine
 use is not affected by the remote prerequisites, but the fixes still apply.
 
@@ -48,7 +47,7 @@ use is not affected by the remote prerequisites, but the fixes still apply.
 From npmjs (also on GitHub Packages):
 
 ```bash
-npm install -g @limccn/longstone@0.1.0
+npm install -g @limccn/longstone@0.1.1
 longstone --help
 ```
 

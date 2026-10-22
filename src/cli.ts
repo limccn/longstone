@@ -21,7 +21,7 @@ import { pickSigningAccount, warnThrowawayKey } from './keybox.js';
 import { createContext } from './context.js';
 
 const program = new Command();
-program.name('longstone').description('Sovereign agent memory client (MCP + CLI)').version('0.1.0');
+program.name('longstone').description('Sovereign agent memory client (MCP + CLI)').version('0.1.1');
 
 function emit(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value, replacer)}\n`);

@@ -1,6 +1,6 @@
 {
   "name": "@limccn/longstone",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": false,
   "description": "Sovereign agent-memory client: MCP server and CLI that sign locally and anchor memories on an Ethereum chain.",
   "license": "Apache-2.0",
