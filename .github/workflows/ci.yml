@@ -59,6 +59,11 @@ jobs:
       - run: pnpm --filter longstone typecheck
         working-directory: workspace
 
+      # Prompt files are generated from prompts/memory-discipline.md. A hand
+      # edit that skips the generator is drift; fail the build instead.
+      - run: node scripts/generate-prompts.mjs --check
+        working-directory: workspace/longstone
+
   # The Copilot examples launch the PUBLISHED package through `npx`, so this
   # job needs no workspace and no pnpm install. Windows is mandatory: `npx`
   # there is `npx.cmd`, and a host that spawns it without a shell fails with

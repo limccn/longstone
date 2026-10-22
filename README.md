@@ -157,6 +157,7 @@ it still spends gas.
 | GitHub Copilot (VS Code, Copilot CLI, github.com) | [`examples/copilot/README.md`](./examples/copilot/README.md) — the exact file for each host, its key channel, and a launch smoke test |
 | Agent Skills hosts | [`skills/longstone/README.md`](./skills/longstone/README.md) — `npx skills add limccn/longstone --skill longstone` |
 | DeepSeek Harness | [`dsh/README.md`](./dsh/README.md) — the `@limccn/longstone-dsh` Cordis bundle |
+| Prompt kit (Copilot / DSH) | [`prompts/README.md`](./prompts/README.md) — per-host snippets generated from one canonical memory-discipline document |
 | MCP Registry | [`server.json`](./server.json) — validated by `.github/workflows/mcp-registry.yml` |
 
 None of these files carries a key value. The Copilot examples live under

@@ -1,0 +1,4 @@
+# Prompt files are generated and compared byte-for-byte by
+# scripts/generate-prompts.mjs --check. Pin LF so a Windows checkout with
+# core.autocrlf=true does not report false drift.
+prompts/** text eol=lf
