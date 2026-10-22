@@ -156,7 +156,7 @@ stamping is one function with its own tests rather than three assignments.
 ## Tests
 
 ```powershell
-pnpm test          # 53 tests, incl. a full roundtrip against a real Hardhat node
+pnpm test          # 57 tests, incl. a full roundtrip against a real Hardhat node
 pnpm typecheck
 ```
 
