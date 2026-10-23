@@ -8,6 +8,7 @@
 
 import { Command } from 'commander';
 
+import { agentRefFromFlags } from './agent-ref.js';
 import { acl } from './commands/acl.js';
 import { get } from './commands/get.js';
 import { put } from './commands/put.js';
@@ -61,8 +62,20 @@ program
   .option('--tags <tags>', 'comma-separated tags', (value) => value.split(',').filter(Boolean))
   .option('--prev <hash>', 'predecessor commitment hash')
   .option('--owner <address>', 'owner address (defaults to the signing key)')
+  .option(
+    '--agent-registry <ref>',
+    'ERC-8004 identity registry as {namespace}:{chainId}:0x{address}; ' +
+      "pointer only — ownership and ACL remain menhir's (requires --agent-id)",
+  )
+  .option(
+    '--agent-id <decimal>',
+    'ERC-8004 agent token id as a decimal string; requires --agent-registry',
+  )
   .action(async (options) => {
     try {
+      // Validate the pair before a context is created: a partial or malformed
+      // ref must not load a key or reach the gateway.
+      const agent = agentRefFromFlags(options.agentRegistry, options.agentId);
       const result = await withContext('signer', async (ctx) => {
         const account = ctx.keys!.signer!;
         return put(
@@ -73,6 +86,7 @@ program
             ...(options.prev === undefined ? {} : { prev: options.prev }),
             owner: (options.owner ?? account.address) as `0x${string}`,
             account,
+            ...(agent === undefined ? {} : { agent }),
           },
         );
       });

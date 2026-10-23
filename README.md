@@ -114,6 +114,7 @@ $env:LONGSTONE_KEY = '<funded testnet key>'
 
 node dist/cli.js acl grant --owner 0x<owner> --signer 0x<delegated> --roles commit
 node dist/cli.js put --text "用户偏好：Python 用于脚本" --tags layer:deep,topic:prefs
+node dist/cli.js put --text "…" --agent-registry eip155:84532:0x<identity-registry> --agent-id 42
 node dist/cli.js put-batch --text "fact one" --text "fact two" --text "fact three" --tags layer:deep,topic:batch
 node dist/cli.js confirm --tx-hash 0x<transaction-hash>
 node dist/cli.js get --owner 0x<owner> --active-only
@@ -170,6 +171,16 @@ memory.
 `memory_put` and `memory_put_batch` are additive rather than destructive
 (`destructiveHint: false`), but they still spend gas.
 
+### Agent identity (optional)
+
+`put` / `memory_put` can record an ERC-8004 agent pointer in
+`MemoryContent.meta.agent` (`{ registry, agentId }`). It is a **pointer only**:
+ownership and ACL remain menhir's, and `verify` never reads it. Adding the
+pointer changes the content hash and the `(owner, contentHash)` dedup identity;
+omitting it keeps the bytes identical to 0.1.1. longstone never calls an 8004
+contract and does not claim 8004 adoption. Shape, registration-file template
+and red lines: [`docs/agent-identity.md`](./docs/agent-identity.md).
+
 ## Agent and IDE surfaces
 
 | Surface | Entry point |
@@ -225,7 +236,7 @@ stamping is one function with its own tests rather than three assignments.
 ## Tests
 
 ```powershell
-pnpm test          # 175 tests, incl. a full roundtrip against a real Hardhat node
+pnpm test          # 215 tests, incl. a full roundtrip against a real Hardhat node
 pnpm typecheck
 ```
 

@@ -21,6 +21,7 @@ import {
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { z } from 'zod';
 
+import { DECIMAL_RE, REGISTRY_RE, parseAgentRef, type AgentRef } from './agent-ref.js';
 import { acl } from './commands/acl.js';
 import { get } from './commands/get.js';
 import { put } from './commands/put.js';
@@ -45,6 +46,21 @@ export const MCP_INSTRUCTIONS =
 /** Exported so tests can assert validation without a transport round-trip. */
 export const ADDRESS = z.string().regex(/^0x[0-9a-fA-F]{40}$/, '20-byte hex address');
 export const BYTES32 = z.string().regex(/^0x[0-9a-fA-F]{64}$/, '32-byte hex');
+
+/**
+ * Optional ERC-8004 identity pointer (`MemoryContent.meta.agent`).
+ *
+ * Strict by design: the hash preimage must stay minimal, so an unknown key is
+ * rejected here as well as in `parseAgentRef` (the handler re-validates because
+ * it can be called without the schema in tests and the schema is not the trust
+ * boundary).
+ */
+export const AGENT_REF = z
+  .object({
+    registry: z.string().regex(REGISTRY_RE, 'eip155:{chainId}:0x{address}'),
+    agentId: z.string().regex(DECIMAL_RE, 'decimal uint256 string'),
+  })
+  .strict();
 
 /**
  * Tool annotations (MCP spec): clients may use these to label or gate calls
@@ -150,10 +166,26 @@ export function createMcpServer(
           tags: z.array(z.string()).optional(),
           prev: BYTES32.optional(),
           owner: ADDRESS.optional(),
+          agent: AGENT_REF.optional(),
         },
         annotations: PUT_ANNOTATIONS,
       },
-      async (args: { text: string; tags?: string[] | undefined; prev?: string | undefined; owner?: string | undefined }) => {
+      async (args: {
+        text: string;
+        tags?: string[] | undefined;
+        prev?: string | undefined;
+        owner?: string | undefined;
+        agent?: { registry: string; agentId: string } | undefined;
+      }) => {
+        // The ref is validated before context creation: a bad pointer must not
+        // load a key or reach the gateway, and it is a tool error, not a crash.
+        let agent: AgentRef | undefined;
+        try {
+          agent = args.agent === undefined ? undefined : parseAgentRef(args.agent);
+        } catch (error) {
+          return toolError(error);
+        }
+
         const runtime = await createContext({ config: loadConfig(), requireKeys: 'signer' });
         try {
           const account = runtime.keys!.signer!;
@@ -165,6 +197,7 @@ export function createMcpServer(
               ...(args.prev === undefined ? {} : { prev: args.prev as `0x${string}` }),
               owner: (args.owner ?? account.address) as `0x${string}`,
               account,
+              ...(agent === undefined ? {} : { agent }),
             },
           );
           return { content: [{ type: 'text' as const, text: JSON.stringify(toJson(result)) }] };

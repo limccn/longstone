@@ -342,7 +342,14 @@ describe('putMany — one capability, one build, one transaction', () => {
       account: account(),
     });
 
-    expect(Object.keys(result).sort()).toEqual(['cid', 'commitmentHash', 'confirmed', 'txHash']);
+    expect(Object.keys(result).sort()).toEqual([
+      'agent',
+      'cid',
+      'commitmentHash',
+      'confirmed',
+      'txHash',
+    ]);
+    expect(result.agent).toBeNull();
     expect(result.cid).toBe('bafy-item-0');
     expect(result.commitmentHash).toBe(commitmentHash(test.commits[0]!.commitments[0]!));
     expect(result.txHash).toBe(TX);

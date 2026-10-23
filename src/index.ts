@@ -1,3 +1,4 @@
+export * from './agent-ref.js';
 export * from './commands/index.js';
 export * from './batch.js';
 export * from './config.js';

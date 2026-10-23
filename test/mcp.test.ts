@@ -151,6 +151,47 @@ describe('MCP server', () => {
       'texts',
     ]);
   });
+
+  it('memory_put exposes the optional ERC-8004 agent reference', () => {
+    const schema = registeredTools().memory_put?.inputSchema as {
+      def?: { shape?: Record<string, { safeParse: (value: unknown) => { success: boolean } }> };
+    };
+    const shape = schema.def?.shape ?? {};
+    expect(Object.keys(shape).sort()).toEqual(['agent', 'owner', 'prev', 'tags', 'text']);
+
+    const agent = shape.agent!;
+    const registry = 'eip155:84532:0x8004A818BFB912233c491871b3d84c89A494BD9e';
+    // Optional: omitting the field is valid.
+    expect(agent.safeParse(undefined).success).toBe(true);
+    expect(agent.safeParse({ registry, agentId: '42' }).success).toBe(true);
+    // Invalid refs are rejected at the schema, before the handler runs.
+    expect(agent.safeParse({ registry, agentId: 42 }).success).toBe(false);
+    expect(agent.safeParse({ registry }).success).toBe(false);
+    expect(agent.safeParse({ agentId: '42' }).success).toBe(false);
+    expect(agent.safeParse({ registry, agentId: '1', chain: 'base' }).success).toBe(false);
+  });
+
+  it('memory_put returns a typed tool error for a bad ref before any IO', async () => {
+    const result = await registeredTools().memory_put!.handler(
+      {
+        text: 'a memory with a malformed agent pointer',
+        agent: {
+          registry: 'eip155:84532:0x8004A818BFB912233c491871b3d84c89A494BD9e',
+          agentId: 42,
+        },
+      },
+      fakeContext(),
+    );
+
+    // Fail closed and typed: no key is loaded, no context is created, no row
+    // is staged. The handler re-validates because the schema is not the trust
+    // boundary (the tool can be driven without it, as here).
+    expect(result.isError).toBe(true);
+    const content = result.content as Array<{ type: string; text: string }>;
+    const payload = JSON.parse(content[0]!.text) as { code: string; detail?: string };
+    expect(payload.code).toBe('SCHEMA_VIOLATION');
+    expect(payload.detail).toContain('meta.agent.agentId');
+  });
 });
 
 describe('destructive tool confirmation (MRTR)', () => {

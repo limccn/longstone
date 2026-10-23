@@ -11,6 +11,7 @@
 
 import type { PrivateKeyAccount } from 'viem/accounts';
 
+import { parseAgentRef, type AgentRef } from '../agent-ref.js';
 import { fail } from '../errors.js';
 import { putMany, type PutDeps } from './put-batch.js';
 
@@ -22,6 +23,8 @@ export interface PutOptions {
   prev?: `0x${string}`;
   owner: `0x${string}`;
   account: PrivateKeyAccount;
+  /** Optional ERC-8004 identity pointer, stored at `MemoryContent.meta.agent`. */
+  agent?: AgentRef;
 }
 
 export interface PutResult {
@@ -29,15 +32,22 @@ export interface PutResult {
   commitmentHash: `0x${string}`;
   txHash: `0x${string}`;
   confirmed: boolean;
+  /** The identity reference anchored in `meta.agent`, or null when omitted. */
+  agent: AgentRef | null;
 }
 
 export async function put(deps: PutDeps, options: PutOptions): Promise<PutResult> {
+  // Validate before putMany creates a capability, so a bad ref costs no pin
+  // and no gas. The returned copy is also what the caller gets echoed back.
+  const agent = options.agent === undefined ? null : parseAgentRef(options.agent);
+
   const batch = await putMany(deps, {
     intents: [{ text: options.text }],
     tags: options.tags ?? [],
     ...(options.prev === undefined ? {} : { prev: options.prev }),
     owner: options.owner,
     account: options.account,
+    ...(agent === null ? {} : { agent }),
   });
 
   const first = batch.items[0];
@@ -48,5 +58,6 @@ export async function put(deps: PutDeps, options: PutOptions): Promise<PutResult
     commitmentHash: first.commitmentHash,
     txHash: batch.txHash,
     confirmed: batch.confirmed,
+    agent,
   };
 }

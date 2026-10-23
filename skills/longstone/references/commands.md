@@ -42,12 +42,20 @@ npx -y @limccn/longstone@0.1.1 put \
   --text "<memory text>" \
   --tags "layer:deep,topic:prefs" \
   [--prev 0x<commitment-hash>] \
-  [--owner 0x<owner-address>]
+  [--owner 0x<owner-address>] \
+  [--agent-registry <namespace>:<chainId>:0x<identity-registry> --agent-id <decimal>]
 ```
 
-Returns `{ cid, commitmentHash, txHash, confirmed }`. `--owner` defaults to the
+Returns `{ cid, commitmentHash, txHash, confirmed, agent }`; `agent` is the
+anchored `{ registry, agentId }` pointer or `null`. `--owner` defaults to the
 signing key's address. Tags are comma-separated; `--prev` names the predecessor
 commitment (the new commitment is its successor).
+
+`--agent-registry` and `--agent-id` are both-or-neither and write
+`MemoryContent.meta.agent`. The reference is a pointer only: ownership and ACL
+remain menhir's, and `verify` never reads it. It becomes part of the content, so
+it changes the content hash and the `(owner, contentHash)` dedup identity.
+Omitting both keeps the bytes identical to 0.1.1. There is no default registry.
 
 If the transaction is broadcast and mined but the gateway confirm cannot be
 reached, the command still returns `txHash` with `confirmed: false` and prints a

@@ -35,6 +35,7 @@ import {
 } from '@limccn/menhir-core';
 import type { PrivateKeyAccount } from 'viem/accounts';
 
+import { parseAgentRef, type AgentRef } from '../agent-ref.js';
 import { selectLocalCommitments } from '../batch.js';
 import type { LongstoneConfig } from '../config.js';
 import { confirmWithRetry, isRetryableConfirmError } from '../confirm.js';
@@ -57,6 +58,12 @@ export interface PutBatchOptions {
   prev?: `0x${string}`;
   owner: `0x${string}`;
   account: PrivateKeyAccount;
+  /**
+   * Optional ERC-8004 identity reference, stored at `MemoryContent.meta.agent`.
+   * A pointer only: ownership and ACL remain menhir's. Shared by every item in
+   * v1 (per-item agent refs are out of scope).
+   */
+  agent?: AgentRef;
 }
 
 export interface PutBatchResult {
@@ -119,8 +126,19 @@ export async function putMany(deps: PutDeps, options: PutBatchOptions): Promise<
     fail({ code: 'INVALID_BATCH_SIZE' });
   }
 
+  // 0b. Validate the optional agent reference before a capability exists: a
+  //     bad ref must cost no pin and no gas. `meta` is only added when a ref
+  //     is present, so the no-agent bytes stay byte-identical to 0.1.1.
+  const agent = options.agent === undefined ? undefined : parseAgentRef(options.agent);
+
   const contents = intents.map((intent) =>
-    parseMemoryContent({ text: intent.text, format: 'text.v0' }),
+    parseMemoryContent({
+      text: intent.text,
+      format: 'text.v0',
+      ...(agent === undefined
+        ? {}
+        : { meta: { agent: { registry: agent.registry, agentId: agent.agentId } } }),
+    }),
   );
   const hashes = contents.map((content) => contentHash(content));
   const digests = contents.map((content) => cidDigest(canonicalBytes(content)));
