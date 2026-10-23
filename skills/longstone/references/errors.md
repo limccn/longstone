@@ -20,6 +20,7 @@ Branch on `code`; the human text is secondary and may be redacted.
 | `SCHEMA_VIOLATION`, `NON_NORMALIZED_INPUT`, `TAG_TOO_LONG`, `UNKNOWN_KEY`, `INVALID_HEX` | Request validation. | Fix the arguments: address shape, bytes32 shape, tag length, canonical text. |
 | `REGISTRY_NOT_CONFIGURED` | No registry code at the configured address/chain, or an impossible start block. | Configuration problem. Check `registryAddress`, `rpcUrl`, and `chainId`; do not write. |
 | `RPC_UNAVAILABLE` | The chain RPC could not be reached. | Retry with backoff; if it persists, report. Do not present staging rows as chain state. |
+| `INTERNAL_ERROR` | A client-side bug (invalid stamp context, encoding failure, unexpected error). | Do not retry. Report the message; it names the original error. |
 | `INSECURE_ENDPOINT` | A remote endpoint is not `https://`. | Fix the configuration. Loopback `http://` is the only exception. |
 | `GATE_UNREACHABLE` | The gateway could not be reached. | Reads may still work: chain reads use RPC, and `verify --direct` (with a configured `ipfsGateway`) fetches bytes without the gateway. Retry or report; never guess content. |
 | `GATE_REJECTED` | The gateway rejected the request; read `gateCode`. | `CONTENT_NOT_FOUND` means the bytes are not staged or pinned — do not treat them as a memory. `CAPABILITY_REQUIRED` means the client is too old — upgrade to the pinned version. |

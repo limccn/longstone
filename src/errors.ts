@@ -34,13 +34,17 @@ export type LongstoneError =
   | { code: 'UNKNOWN_REVERT'; selector: `0x${string}` }
   // local
   | { code: 'NO_KEY'; detail: string }
-  | { code: 'RPC_UNAVAILABLE'; detail: string };
+  | { code: 'RPC_UNAVAILABLE'; detail: string }
+  // A failure that is neither a transport outage nor a decodable contract
+  // revert: a client-side bug. Distinct from RPC_UNAVAILABLE because the
+  // correct response is to fix the call, not to retry with backoff.
+  | { code: 'INTERNAL_ERROR'; detail: string };
 
 export class LongstoneFailure extends Error {
   readonly error: LongstoneError;
 
-  constructor(error: LongstoneError) {
-    super(describe(error));
+  constructor(error: LongstoneError, options?: ErrorOptions) {
+    super(describe(error), options);
     this.name = 'LongstoneFailure';
     this.error = error;
   }
@@ -100,6 +104,8 @@ export function describe(error: LongstoneError): string {
       return error.detail;
     case 'RPC_UNAVAILABLE':
       return `rpc unavailable: ${error.detail}`;
+    case 'INTERNAL_ERROR':
+      return `internal error (client-side bug; do not retry): ${error.detail}`;
     case 'SCHEMA_VIOLATION':
     case 'NON_NORMALIZED_INPUT':
     case 'TAG_TOO_LONG':
@@ -111,11 +117,30 @@ export function describe(error: LongstoneError): string {
   }
 }
 
-export function fail(error: LongstoneError): never {
+export function fail(error: LongstoneError, options?: ErrorOptions): never {
   // One choke point for every typed failure: a transport message can embed a
   // credential-bearing URL, and this object is serialized to stderr and to MCP
   // results unchanged.
-  throw new LongstoneFailure(redactError(error));
+  throw new LongstoneFailure(redactError(error), options);
+}
+
+/**
+ * A description that names the error CLASS as well as its message.
+ *
+ * "TypeError: Cannot read properties of undefined" tells a caller this is a
+ * client bug; `String(error)` alone loses the class on a plain `Error`.
+ */
+export function errorDetail(error: unknown): string {
+  return error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+}
+
+/**
+ * The untyped-failure form for the CLI/MCP printers, which never go through
+ * `fail()`. Redacted here so a message embedding an endpoint URL is safe on
+ * both surfaces.
+ */
+export function internalError(error: unknown): LongstoneError {
+  return { code: 'INTERNAL_ERROR', detail: redactText(errorDetail(error)) };
 }
 
 function redactError(error: LongstoneError): LongstoneError {

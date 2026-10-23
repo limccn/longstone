@@ -15,8 +15,7 @@ import { retract } from './commands/retract.js';
 import { stageStatus } from './commands/stage-status.js';
 import { verify } from './commands/verify.js';
 import { loadConfig, saveConfig, type LongstoneConfig } from './config.js';
-import { LongstoneFailure, describe } from './errors.js';
-import { redactText } from './redact.js';
+import { surfaceText } from './error-surface.js';
 import { pickSigningAccount, warnThrowawayKey } from './keybox.js';
 import { createContext } from './context.js';
 
@@ -46,13 +45,10 @@ async function withContext<T>(
 }
 
 function handleError(error: unknown): never {
-  if (error instanceof LongstoneFailure) {
-    process.stderr.write(`${describe(error.error)}\n`);
-    process.exitCode = 1;
-  } else {
-    process.stderr.write(`${redactText((error as Error).message)}\n`);
-    process.exitCode = 1;
-  }
+  // Typed failures print `describe()` unchanged; an untyped failure becomes
+  // INTERNAL_ERROR with the same code and text MCP reports.
+  process.stderr.write(`${surfaceText(error)}\n`);
+  process.exitCode = 1;
   throw error;
 }
 

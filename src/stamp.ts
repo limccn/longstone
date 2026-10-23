@@ -49,6 +49,15 @@ export function stampCommitments(
   if (context.blockHeight <= 0n) {
     throw new Error('stamp requires a positive blockHeight');
   }
+  // Zero is the legitimate root sentinel; a MISSING predecessor is a caller
+  // bug, so it is not defaulted here. Without this guard, `undefined` reaches
+  // viem's encoder and fails as "Cannot read properties of undefined (reading
+  // 'length')", which names neither the field nor the fix.
+  if (typeof context.prev !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(context.prev)) {
+    throw new Error(
+      `stamp requires a bytes32 prev (use zero for a root); received ${String(context.prev)}`,
+    );
+  }
 
   return commitments.map((commitment) => {
     // M1 accepts only op = 0. The contract reverts on anything else, so a

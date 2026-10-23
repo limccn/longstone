@@ -1,7 +1,7 @@
 import { commitmentHash, ZERO_BYTES32, type Commitment } from '@limccn/menhir-core';
 import { describe, expect, it } from 'vitest';
 
-import { needsStamping, stampCommitments } from '../src/stamp.js';
+import { needsStamping, stampCommitments, type StampContext } from '../src/stamp.js';
 
 const SIGNER = `0x${'11'.repeat(20)}` as const;
 const OWNER = `0x${'22'.repeat(20)}` as const;
@@ -72,6 +72,62 @@ describe('placeholder stamping (P0-1 / R2)', () => {
       expect(row.signer).toBe(SIGNER);
       expect(row.blockHeight).toBe(9n);
     }
+  });
+});
+
+describe('prev guard (F4)', () => {
+  /** Simulates a JS/embedder caller TypeScript cannot guard. */
+  const context = (prev: unknown): StampContext =>
+    ({ signer: SIGNER, blockHeight: 1n, prev }) as unknown as StampContext;
+
+  it.each([
+    ['undefined', undefined],
+    ['null', null],
+    ['an empty string', ''],
+    ['a truncated value', '0x1234'],
+    ['31 bytes', `0x${'55'.repeat(31)}`],
+    ['a non-hex string', `0x${'zz'.repeat(32)}`],
+    ['a number', 0],
+  ])('rejects %s prev before encoding', (_label, prev) => {
+    // Left unguarded, `prev` reaches viem's encoder and throws
+    // "Cannot read properties of undefined (reading 'length')" — a message
+    // that names neither the field nor the fix.
+    expect(() => stampCommitments([placeholder()], context(prev))).toThrow(/bytes32 prev/);
+  });
+
+  it('names the field and the zero root in the message', () => {
+    expect(() => stampCommitments([placeholder()], context(undefined))).toThrow(
+      /prev.*use zero for a root/i,
+    );
+  });
+
+  it('accepts the zero root', () => {
+    const [stamped] = stampCommitments([placeholder()], {
+      signer: SIGNER,
+      blockHeight: 1n,
+      prev: ZERO_BYTES32,
+    });
+    expect(stamped!.prev).toBe(ZERO_BYTES32);
+  });
+
+  it('accepts an uppercase 32-byte value', () => {
+    const uppercase = `0x${'AA'.repeat(32)}` as const;
+    const [stamped] = stampCommitments([placeholder()], {
+      signer: SIGNER,
+      blockHeight: 1n,
+      prev: uppercase,
+    });
+    expect(stamped!.prev).toBe(uppercase);
+  });
+
+  it('accepts a real predecessor hash', () => {
+    const prev = `0x${'55'.repeat(32)}` as const;
+    const [stamped] = stampCommitments([placeholder()], {
+      signer: SIGNER,
+      blockHeight: 1n,
+      prev,
+    });
+    expect(stamped!.prev).toBe(prev);
   });
 });
 

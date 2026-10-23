@@ -11,8 +11,6 @@
 
 import {
   encodeFunctionData,
-  BaseError,
-  ContractFunctionRevertedError,
   createPublicClient,
   createWalletClient,
   http,
@@ -23,7 +21,8 @@ import { memoryRegistryAbi, type Commitment } from '@limccn/menhir-core';
 import type { PrivateKeyAccount } from 'viem/accounts';
 
 import type { LongstoneConfig } from './config.js';
-import { fail, fromContractError } from './errors.js';
+import { fail } from './errors.js';
+import { failClassified } from './rpc-errors.js';
 
 export interface RegistryClient {
   getCommitment(hash: `0x${string}`): Promise<Commitment>;
@@ -52,14 +51,10 @@ export interface RegistryClient {
 
 /** Translate a viem error into the typed union, never a raw revert string. */
 function translate(error: unknown): never {
-  if (error instanceof BaseError) {
-    const reverted = error.walk((e) => e instanceof ContractFunctionRevertedError);
-    if (reverted instanceof ContractFunctionRevertedError) {
-      const name = reverted.data?.errorName ?? 'unknown';
-      fail(fromContractError(name, reverted.data?.args));
-    }
-  }
-  fail({ code: 'RPC_UNAVAILABLE', detail: (error as Error).message });
+  // Contract reverts keep their decoded code; transport failures become
+  // RPC_UNAVAILABLE; anything else is a client-side bug (INTERNAL_ERROR),
+  // not a retryable outage.
+  failClassified(error);
 }
 
 /**

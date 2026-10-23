@@ -13,7 +13,7 @@ import { createPublicClient, http, parseEventLogs, type PublicClient } from 'vie
 import { memoryRegistryAbi, type Commitment } from '@limccn/menhir-core';
 
 import { fail } from './errors.js';
-import { redactText } from './redact.js';
+import { classifyError, failClassified } from './rpc-errors.js';
 
 export interface IndexedCommitment {
   commitmentHash: `0x${string}`;
@@ -129,7 +129,15 @@ export async function scanOwner(options: ScanOptions): Promise<ChainIndex> {
   const client = options.client ?? createPublicClient({ transport: http(options.rpcUrl) });
   const maxAttempts = options.maxAttempts ?? 6;
 
-  const latest = await client.getBlockNumber();
+  let latest: bigint;
+  try {
+    latest = await client.getBlockNumber();
+  } catch (error) {
+    // Without this, the first network failure of a scan reaches CLI/MCP as a
+    // raw error (INTERNAL_ERROR at the surface) — the exact misclassification
+    // this change exists to prevent.
+    failClassified(error);
+  }
   const configured = options.fromBlock ?? 0n;
 
   const key = deployBlockCacheKey(options);
@@ -139,7 +147,9 @@ export async function scanOwner(options: ScanOptions): Promise<ChainIndex> {
     try {
       discovered = await findDeployBlock(client, options.registryAddress, latest);
     } catch (error) {
-      fail({ code: 'RPC_UNAVAILABLE', detail: (error as Error).message });
+      // A getCode transport failure is an outage; a broken request is a client
+      // bug. One classifier keeps this honest in both directions.
+      failClassified(error);
     }
     if (discovered === null) {
       fail({
@@ -240,12 +250,23 @@ export async function scanOwner(options: ScanOptions): Promise<ChainIndex> {
         advanced = true;
       } catch (error) {
         const message = (error as Error).message ?? '';
+        // Two axes: the class-based classifier (is this an outage?) and the
+        // existing text heuristic (does the provider hint at retry/range?).
+        const transport = classifyError(error).kind === 'transport';
         const kind = classify(message);
 
-        if (kind === 'fatal') {
-          // A permanent failure must not disguise itself as a slow one.
-          throw new Error(
-            `getLogs failed for blocks ${cursor}..${end} (cursor ${cursor}): ${redactText(message)}`,
+        if (kind === 'fatal' && !transport) {
+          // A permanent CLIENT failure must not disguise itself as a slow one.
+          // Transport errors whose text looks fatal (a connection refusal
+          // names no 429/5xx) deliberately fall through to the retry path.
+          fail(
+            {
+              code: 'INTERNAL_ERROR',
+              detail:
+                `getLogs failed for blocks ${cursor}..${end} (cursor ${cursor}, chunk ${chunk}, ` +
+                `${attempt} attempts): ${message}`,
+            },
+            { cause: error },
           );
         }
         if (kind === 'range' || attempt === 1) {
@@ -258,10 +279,12 @@ export async function scanOwner(options: ScanOptions): Promise<ChainIndex> {
           }
         }
         if (attempt >= maxAttempts) {
-          throw new Error(
-            `getLogs failed for blocks ${cursor}..${end} (cursor ${cursor}, chunk ${chunk}, ` +
-              `${attempt} attempts): ${redactText(message)}`,
-          );
+          fail({
+            code: 'RPC_UNAVAILABLE',
+            detail:
+              `getLogs failed for blocks ${cursor}..${end} (cursor ${cursor}, chunk ${chunk}, ` +
+              `${attempt} attempts): ${message}`,
+          });
         }
         // Backoff before the next attempt; the same window is retried at the
         // new (smaller or equal) size.

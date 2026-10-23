@@ -27,8 +27,7 @@ import { put } from './commands/put.js';
 import { retract } from './commands/retract.js';
 import { stageStatus } from './commands/stage-status.js';
 import { verify } from './commands/verify.js';
-import { LongstoneFailure } from './errors.js';
-import { redactText } from './redact.js';
+import { surfaceJson } from './error-surface.js';
 import { pickSigningAccount } from './keybox.js';
 import { createContext } from './context.js';
 import { loadConfig } from './config.js';
@@ -114,11 +113,12 @@ function toJson(value: unknown): unknown {
 }
 
 function toolError(error: unknown) {
-  const message =
-    error instanceof LongstoneFailure
-      ? JSON.stringify(error.error)
-      : JSON.stringify({ code: 'UNKNOWN_ERROR', detail: redactText((error as Error).message) });
-  return { isError: true as const, content: [{ type: 'text' as const, text: message }] };
+  // Typed failures serialize the union object unchanged; an untyped failure
+  // becomes INTERNAL_ERROR with the same code and text the CLI prints.
+  return {
+    isError: true as const,
+    content: [{ type: 'text' as const, text: surfaceJson(error) }],
+  };
 }
 
 /**
