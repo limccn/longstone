@@ -240,7 +240,9 @@ describe('scan classification — getLogs (R3)', () => {
     expect(calls).toBe(2);
     expect(typed.error).toMatchObject({ code: 'RPC_UNAVAILABLE' });
     const detail = (typed.error as { detail: string }).detail;
-    expect(detail).toContain('blocks 400..499');
+    // Attempt 1 used the full 100-block window; the retry recomputed its end
+    // from the halved 50-block window instead of re-requesting 400..499.
+    expect(detail).toContain('blocks 400..449');
     expect(detail).toContain('cursor 400');
     expect(detail).toMatch(/chunk \d+/);
     expect(detail).toContain('2 attempts');

@@ -355,6 +355,9 @@ program
           case 'scanChunkBlocks':
             next.scanChunkBlocks = Number(value);
             break;
+          case 'scanMaxChunkBlocks':
+            next.scanMaxChunkBlocks = Number(value);
+            break;
           case 'scanStartBlock':
             next.scanStartBlock = Number(value);
             break;

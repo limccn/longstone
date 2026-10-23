@@ -24,6 +24,12 @@ export interface LongstoneConfig {
   ipfsGateway: string;
   scanChunkBlocks: number;
   /**
+   * Growth ceiling for adaptive `getLogs` windows. Scans start at
+   * `scanChunkBlocks`, double after three consecutive successes, and never
+   * exceed this value. Range rejections lower it for the current process.
+   */
+  scanMaxChunkBlocks: number;
+  /**
    * Lower bound for chain scans. `0` means "discover the deployment block".
    * The effective start is always `max(scanStartBlock, deploymentBlock)`:
    * no commitment can predate the registry's code.
@@ -45,6 +51,7 @@ export const DEFAULTS: LongstoneConfig = {
   // rather than silently substituting a public host (M1-9).
   ipfsGateway: '',
   scanChunkBlocks: 200,
+  scanMaxChunkBlocks: 10_000,
   scanStartBlock: 0,
 };
 
@@ -131,6 +138,27 @@ export function validate(config: LongstoneConfig): void {
   }
   if (!Number.isInteger(config.scanStartBlock) || config.scanStartBlock < 0) {
     throw new Error(`scanStartBlock must be a non-negative integer: ${config.scanStartBlock}`);
+  }
+  // Both scan keys are bounds on eth_getLogs: the first request uses
+  // scanChunkBlocks, growth stops at scanMaxChunkBlocks. A config that predates
+  // scanMaxChunkBlocks keeps the 10_000 default, so a larger scanChunkBlocks
+  // must set the ceiling explicitly rather than being silently clamped.
+  if (!Number.isInteger(config.scanChunkBlocks) || config.scanChunkBlocks <= 0) {
+    throw new Error(`scanChunkBlocks must be a positive integer: ${config.scanChunkBlocks}`);
+  }
+  if (!Number.isInteger(config.scanMaxChunkBlocks) || config.scanMaxChunkBlocks <= 0) {
+    throw new Error(`scanMaxChunkBlocks must be a positive integer: ${config.scanMaxChunkBlocks}`);
+  }
+  if (config.scanChunkBlocks > config.scanMaxChunkBlocks) {
+    throw new Error(
+      `scanChunkBlocks (${config.scanChunkBlocks}) must not exceed scanMaxChunkBlocks ` +
+        `(${config.scanMaxChunkBlocks}); raise scanMaxChunkBlocks to scan at the larger window`,
+    );
+  }
+  if (config.scanMaxChunkBlocks > 5_000_000) {
+    throw new Error(
+      `scanMaxChunkBlocks must not exceed 5000000: ${config.scanMaxChunkBlocks}`,
+    );
   }
 }
 

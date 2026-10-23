@@ -70,3 +70,41 @@ describe('endpoint schemes', () => {
     ).toThrow(/requires hisaishiBaseUrl/);
   });
 });
+
+describe('scan window bounds', () => {
+  it('accepts the default pair', () => {
+    expect(DEFAULTS.scanChunkBlocks).toBe(200);
+    expect(DEFAULTS.scanMaxChunkBlocks).toBe(10_000);
+    expect(() => validate(config())).not.toThrow();
+  });
+
+  it('accepts max == chunk and the hard maximum', () => {
+    expect(() => validate(config({ scanChunkBlocks: 500, scanMaxChunkBlocks: 500 }))).not.toThrow();
+    expect(() =>
+      validate(config({ scanChunkBlocks: 200, scanMaxChunkBlocks: 5_000_000 })),
+    ).not.toThrow();
+  });
+
+  it('rejects non-positive or non-integer scan windows', () => {
+    expect(() => validate(config({ scanChunkBlocks: 0 }))).toThrow(/scanChunkBlocks/);
+    expect(() => validate(config({ scanChunkBlocks: -1 }))).toThrow(/scanChunkBlocks/);
+    expect(() => validate(config({ scanChunkBlocks: 1.5 }))).toThrow(/scanChunkBlocks/);
+    expect(() => validate(config({ scanMaxChunkBlocks: 0 }))).toThrow(/scanMaxChunkBlocks/);
+    expect(() => validate(config({ scanMaxChunkBlocks: -1 }))).toThrow(/scanMaxChunkBlocks/);
+    expect(() => validate(config({ scanMaxChunkBlocks: 1.5 }))).toThrow(/scanMaxChunkBlocks/);
+  });
+
+  it('rejects max below chunk and above the hard maximum', () => {
+    expect(() =>
+      validate(config({ scanChunkBlocks: 500, scanMaxChunkBlocks: 499 })),
+    ).toThrow(/scanMaxChunkBlocks/);
+    expect(() => validate(config({ scanMaxChunkBlocks: 5_000_001 }))).toThrow(/scanMaxChunkBlocks/);
+  });
+
+  it('makes a pre-existing chunk above the default ceiling set a matching max', () => {
+    expect(() => validate(config({ scanChunkBlocks: 20_000 }))).toThrow(/scanMaxChunkBlocks/);
+    expect(() =>
+      validate(config({ scanChunkBlocks: 20_000, scanMaxChunkBlocks: 20_000 })),
+    ).not.toThrow();
+  });
+});

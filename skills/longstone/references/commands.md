@@ -110,6 +110,12 @@ npx -y @limccn/longstone@0.1.1 get \
 Returns `{ staged, indexed }`. Each indexed row carries `commitmentHash`,
 `contentHash`, `tags`, `deep`, `active`, `blockNumber`, and `replacedBy`.
 
+Full-history scans start at `scanChunkBlocks` (default 200) and grow after three
+consecutive successes up to `scanMaxChunkBlocks` (default 10000); set both with
+`longstone config --set scanChunkBlocks=<n>` / `--set scanMaxChunkBlocks=<n>`.
+On a public RPC a full scan is slow and may hit 429s — use a dedicated RPC for
+large owners. `verify --cid --owner` uses the same scanner.
+
 ### verify — prove a memory
 
 ```bash
@@ -137,6 +143,13 @@ Chain-only semantics: expected `contentHash` and `cidDigest` always come from
 the bytes are fetched (the configured `ipfsGateway`, never a public fallback),
 not where the expected values come from. An unresolved lookup is the typed
 `HASH_UNRESOLVED` error, never an empty report.
+
+Seed fixtures written by `menhir/contracts/scripts/seed.ts` go straight to the
+contract and are never pinned, so their CIDs return `CONTENT_NOT_FOUND` under
+`--direct`. That is "not pinned", not "content mismatch": rebuild the seed text
+from the script and compare both digests offline — they match the chain.
+Explorer APIs are for diagnosis and listing only; they are never the read path
+that verification trusts.
 
 Require `anchored: true` before relying on the bytes. `active: true` adds "not
 retracted". `hashSource` is `explicit`, `gateway`, or `indexer` and says how `H`

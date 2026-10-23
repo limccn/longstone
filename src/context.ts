@@ -76,6 +76,7 @@ export async function createContext(options: ContextOptions): Promise<CommandCon
         rpcUrl: config.rpcUrl,
         chainId: config.chainId,
         chunk: config.scanChunkBlocks,
+        maxChunk: config.scanMaxChunkBlocks,
         ...(config.scanStartBlock > 0 ? { fromBlock: BigInt(config.scanStartBlock) } : {}),
       }),
     close,

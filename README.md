@@ -79,6 +79,20 @@ must be `https://`; loopback `http://` is accepted for local development.
 `scanStartBlock` is an optional lower bound for chain scans: `0` (the default)
 discovers the registry deployment block, and the effective start is never
 earlier than that — no commitment can predate the registry's code.
+`scanChunkBlocks` (default `200`) is the first `getLogs` window; the scanner
+doubles it after three consecutive successful requests, up to
+`scanMaxChunkBlocks` (default `10_000`), and shrinks it when a provider rejects
+a range. A rejected size is remembered per RPC endpoint for the process. Tune
+both to the provider you read from:
+
+```powershell
+node dist/cli.js config --set scanChunkBlocks=500
+node dist/cli.js config --set scanMaxChunkBlocks=5000
+```
+
+Both must be positive integers with
+`scanChunkBlocks <= scanMaxChunkBlocks <= 5000000`; a `scanChunkBlocks` above
+the default ceiling requires setting `scanMaxChunkBlocks` explicitly.
 
 Environment overrides the file: `LONGSTONE_RPC_URL`,
 `LONGSTONE_REGISTRY_ADDRESS`. Keys come **only** from the environment:
@@ -211,7 +225,7 @@ stamping is one function with its own tests rather than three assignments.
 ## Tests
 
 ```powershell
-pnpm test          # 162 tests, incl. a full roundtrip against a real Hardhat node
+pnpm test          # 175 tests, incl. a full roundtrip against a real Hardhat node
 pnpm typecheck
 ```
 
@@ -225,6 +239,23 @@ uses the node's unlocked accounts so **no private key appears in the test file**
   against it; the local F1 form remains the default for single-machine use.
 - **`hisaishiMode=local` (spawn a server) is not implemented** and fails with an
   explicit message rather than silently behaving like `embedded`.
+- **Full-history reads on a public RPC are slow.** Listing an owner's complete
+  history starts at the registry deployment block (about 375k blocks on Base
+  Sepolia at M1). On `sepolia.base.org` this can take many minutes and trigger
+  `429` responses. Point `rpcUrl` at a dedicated provider for production reads
+  and raise `scanChunkBlocks` / `scanMaxChunkBlocks` to what that provider
+  allows. The window grows gradually (after three successes), so the first
+  request never jumps straight to the ceiling.
+- **Do not make Blockscout or another explorer API the default read path.**
+  Explorer logs are useful for diagnosis and listing, but `verify` expected
+  values must come from chain state (`getCommitment`). No longstone command
+  reads an explorer.
+- **Seed fixtures are source-only.** Rows written by menhir's
+  `contracts/scripts/seed.ts` go straight to the contract and are never pinned.
+  Their CIDs cannot be fetched from any gateway, so `verify --direct` returns
+  `CONTENT_NOT_FOUND` for them. That means "not pinned", not "content
+  mismatch": rebuild the seed text from the script and compare both digests
+  offline — they match the chain.
 - Keys are env-only; encrypted keystore and content keys are M2.
 - Encryption is M2. Everything anchored in M1 is public.
 

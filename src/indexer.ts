@@ -48,6 +48,14 @@ export interface ScanOptions {
   fromBlock?: bigint;
   /** Initial ceiling; the scanner discovers the provider's real cap. */
   chunk?: number;
+  /**
+   * Growth ceiling for the adaptive window. Defaults to `chunk`, so direct
+   * callers that omit it keep a fixed window; the CLI/MCP path always supplies
+   * `config.scanMaxChunkBlocks`.
+   */
+  maxChunk?: number;
+  /** Backoff injection for tests; defaults to `setTimeout`. */
+  sleep?: (ms: number) => Promise<void>;
   client?: PublicClient;
   maxAttempts?: number;
 }
@@ -63,6 +71,27 @@ const RANGE_REJECTION = /\b(?:400|413|414|422)\b|unexpected status code|block ra
  * not cached: a different client is a different chain view.
  */
 const DEPLOY_BLOCK_CACHE = new Map<string, bigint>();
+
+/**
+ * Learned `getLogs` range ceiling, per RPC endpoint.
+ *
+ * A provider that rejected a window will reject it again, so a successful
+ * convergence is remembered for the process. Only a range rejection lowers the
+ * entry; transient 429/timeout failures never do.
+ */
+const SCAN_CAP_CACHE = new Map<string, bigint>();
+
+function minBigInt(a: bigint, b: bigint): bigint {
+  return a < b ? a : b;
+}
+
+function maxBigInt(a: bigint, b: bigint): bigint {
+  return a > b ? a : b;
+}
+
+function defaultSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function deployBlockCacheKey(options: ScanOptions): string | null {
   if (options.rpcUrl === undefined) return null;
@@ -189,18 +218,25 @@ export async function scanOwner(options: ScanOptions): Promise<ChainIndex> {
   }
 
   let chunk = BigInt(options.chunk ?? 200);
+  let maxChunk = BigInt(options.maxChunk ?? options.chunk ?? 200);
+  const cachedCap = options.rpcUrl === undefined ? undefined : SCAN_CAP_CACHE.get(options.rpcUrl);
+  if (cachedCap !== undefined) maxChunk = minBigInt(maxChunk, cachedCap);
+  chunk = minBigInt(chunk, maxChunk);
+  const sleep = options.sleep ?? defaultSleep;
 
   const byHash = new Map<`0x${string}`, IndexedCommitment>();
   const order: `0x${string}`[] = [];
   let cursor = start;
+  let lastGoodChunk = 0n;
+  let successStreak = 0;
 
   while (cursor <= latest) {
-    const end = cursor + chunk - 1n <= latest ? cursor + chunk - 1n : latest;
-    let attempt = 0;
     let advanced = false;
 
-    while (attempt < maxAttempts && !advanced) {
-      attempt += 1;
+    for (let attempt = 1; attempt <= maxAttempts && !advanced; attempt += 1) {
+      // Recompute on every attempt: after a shrink the retry itself must ask
+      // for the smaller span, not the window that just failed.
+      const end = minBigInt(cursor + chunk - 1n, latest);
       try {
         const rawLogs = await client.getLogs({
           address: options.registryAddress,
@@ -248,6 +284,12 @@ export async function scanOwner(options: ScanOptions): Promise<ChainIndex> {
         // Success: adopt the window and advance exactly by it.
         cursor = end + 1n;
         advanced = true;
+        successStreak += 1;
+        lastGoodChunk = chunk;
+        if (successStreak >= 3 && chunk < maxChunk) {
+          chunk = minBigInt(maxChunk, chunk * 2n);
+          successStreak = 0;
+        }
       } catch (error) {
         const message = (error as Error).message ?? '';
         // Two axes: the class-based classifier (is this an outage?) and the
@@ -269,14 +311,26 @@ export async function scanOwner(options: ScanOptions): Promise<ChainIndex> {
             { cause: error },
           );
         }
-        if (kind === 'range' || attempt === 1) {
-          const cap = statedCap(message);
-          if (cap !== null) {
-            // Adopt a stated cap immediately rather than halving toward it.
-            chunk = BigInt(cap);
-          } else if (chunk > 1n) {
-            chunk = chunk / 2n;
-          }
+        successStreak = 0;
+        const cap = statedCap(message);
+        if (kind === 'range') {
+          // The ceiling can only fall: a stated provider cap, the last window
+          // that worked, or half the current window when nothing has worked.
+          const ceiling =
+            cap !== null
+              ? BigInt(cap)
+              : lastGoodChunk > 0n
+                ? lastGoodChunk
+                : maxBigInt(1n, chunk / 2n);
+          maxChunk = minBigInt(maxChunk, ceiling);
+          // A failed attempt never grows the next request, even when the
+          // provider states a cap above the window that just failed.
+          chunk = minBigInt(chunk, maxChunk);
+          if (options.rpcUrl !== undefined) SCAN_CAP_CACHE.set(options.rpcUrl, maxChunk);
+        } else if (kind === 'retryable' || transport) {
+          // Transient: halve the current window on the first attempt, but never
+          // lower the ceiling — a recovered provider may grow again.
+          if (attempt === 1) chunk = maxBigInt(1n, chunk / 2n);
         }
         if (attempt >= maxAttempts) {
           fail({
@@ -286,9 +340,8 @@ export async function scanOwner(options: ScanOptions): Promise<ChainIndex> {
               `${attempt} attempts): ${message}`,
           });
         }
-        // Backoff before the next attempt; the same window is retried at the
-        // new (smaller or equal) size.
-        await new Promise((resolve) => setTimeout(resolve, Math.min(2000, 100 * attempt)));
+        // Backoff before the next attempt; the window is recomputed above.
+        await sleep(Math.min(2000, 100 * attempt));
       }
     }
   }
