@@ -9,12 +9,12 @@
  *      lockfile, so the pin is the supply-chain control, PS-5);
  *   2. starts the configured command in a fresh temporary directory with
  *      LONGSTONE_KEY, LONGSTONE_OWNER_KEY and LONGSTONE_MCP_READ_ONLY removed,
- *      proving the server starts and registers all six tools with no key;
+ *      proving the server starts and registers all seven tools with no key;
  *   3. performs BOTH MCP handshakes against the same config:
  *        - legacy `initialize` (2025-11-25) + `tools/list`
  *        - modern `server/discover` (2026-07-28) with the envelope at
  *          `params._meta` + `tools/list`
- *      and asserts the six tool names and that `instructions` is present in
+ *      and asserts the seven tool names and that `instructions` is present in
  *      both eras;
  *   4. scans examples/copilot/** for 64-hex literals and key-looking values
  *      (PS-1) and fails if any are found;
@@ -44,6 +44,7 @@ const EXPECTED_TOOLS = Object.freeze([
   'memory_acl',
   'memory_get',
   'memory_put',
+  'memory_put_batch',
   'memory_retract',
   'memory_stage_status',
   'memory_verify',
@@ -501,7 +502,7 @@ function assertTools(result, label, era) {
   if (names.length !== expected.length || names.some((name, index) => name !== expected[index])) {
     fail(
       `${label} (${era}): expected tools ${expected.join(', ')}; got ${names.length === 0 ? '(none)' : names.join(', ')}. ` +
-        'LONGSTONE_MCP_READ_ONLY is removed for this test, so the writable default must register all six.',
+        'LONGSTONE_MCP_READ_ONLY is removed for this test, so the writable default must register all seven.',
     );
   }
 }
@@ -642,7 +643,7 @@ async function main() {
     await rm(tempRoot, { recursive: true, force: true });
   }
 
-  console.log(`\n[smoke] PASS all ${loaded.length} Copilot configurations (no key, both protocol eras, six tools)`);
+  console.log(`\n[smoke] PASS all ${loaded.length} Copilot configurations (no key, both protocol eras, seven tools)`);
 }
 
 main().catch((error) => {

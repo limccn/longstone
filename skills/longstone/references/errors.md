@@ -14,7 +14,9 @@ Branch on `code`; the human text is secondary and may be redacted.
 | `STAGED_ROW_MISSING` | The gateway did not return the row this client staged. | Nothing was signed. Retry the `put` once; if it repeats, report a gateway problem. |
 | `AMBIGUOUS_BATCH_ROW` | Several staged rows match the locally computed content. | Nothing was signed. Stop and report; never choose one arbitrarily. |
 | `PREDECESSOR_UNKNOWN` | `prev` or `replacedBy` names a commitment that does not exist. | Fix the hash. Do not silently drop the link. |
-| `DUPLICATE_COMMITMENT` | That commitment is already on chain. | Recall it with `get` / `memory_get` instead of writing it again. |
+| `DUPLICATE_COMMITMENT` | That commitment is already on chain. | Recall it with `get` / `memory_get` instead of writing it again. `detail` names the batch item when the duplicate was found at staging. |
+| `STAGING_BATCHED` | The content is already in a batch (stage reported `batched`, or `build` found no staged rows after every stage replied `staged`). Nothing was signed. Carries `contentHash` and, when listable, `txHash`; both are `null` on the build path. | Do not write the same text again now. Wait for the staging TTL, or recover the original transaction with `longstone confirm --tx-hash <hash>`. |
+| `TX_REVERTED` | The transaction was mined and reverted; nothing anchored. This is a deterministic chain failure, not a recoverable confirm failure. | Do not retry the identical batch unchanged. Investigate the revert cause (authorization, predecessor, gas) and fix the request. |
 | `UNKNOWN_COMMITMENT` | The commitment hash is not on chain. | Re-resolve the hash; do not retract or verify a guess. |
 | `INVALID_BATCH_SIZE`, `INVALID_ROLES`, `INVALID_COMMITMENT`, `INVALID_OP`, `FUTURE_BLOCK_HEIGHT` | Contract-level rejection. | Fix the request; do not retry unchanged. `FUTURE_BLOCK_HEIGHT` may indicate a clock or chain mismatch. |
 | `SCHEMA_VIOLATION`, `NON_NORMALIZED_INPUT`, `TAG_TOO_LONG`, `UNKNOWN_KEY`, `INVALID_HEX` | Request validation. | Fix the arguments: address shape, bytes32 shape, tag length, canonical text. |

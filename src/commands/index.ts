@@ -9,6 +9,7 @@
 export { acl, normalizeRoles, ROLE_COMMIT, ROLE_RETRACT } from './acl.js';
 export { get } from './get.js';
 export { put } from './put.js';
+export { putMany } from './put-batch.js';
 export { retract } from './retract.js';
 export { verify } from './verify.js';
 export { stageStatus } from './stage-status.js';
@@ -16,5 +17,6 @@ export { stageStatus } from './stage-status.js';
 export type { AclOptions, AclResult } from './acl.js';
 export type { GetOptions, GetResult } from './get.js';
 export type { PutOptions, PutResult } from './put.js';
+export type { PutBatchOptions, PutBatchResult, PutDeps, PutIntent } from './put-batch.js';
 export type { RetractOptions, RetractResult } from './retract.js';
 export type { VerifyOptions, VerifyReport } from './verify.js';

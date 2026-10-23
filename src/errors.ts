@@ -19,9 +19,12 @@ export type LongstoneError =
   | { code: 'PREDECESSOR_UNKNOWN'; which: 'prev' | 'replacedBy' }
   | { code: 'NOT_AUTHORIZED'; role: 'commit' | 'retract' }
   | { code: 'SIGNER_MISMATCH'; provided: string; actual: string }
-  | { code: 'DUPLICATE_COMMITMENT' }
+  | { code: 'DUPLICATE_COMMITMENT'; detail?: string }
   | { code: 'UNKNOWN_COMMITMENT' }
   | { code: 'INVALID_BATCH_SIZE' | 'INVALID_ROLES' | 'INVALID_COMMITMENT' | 'INVALID_OP' | 'FUTURE_BLOCK_HEIGHT' }
+  // A reverted receipt is a deterministic chain failure, not a recoverable
+  // confirm failure: the transaction was mined and its effects (none) are final.
+  | { code: 'TX_REVERTED'; txHash: `0x${string}` }
   // local trust-boundary failures
   | { code: 'STAGED_ROW_MISSING'; owner: string; contentHash: string }
   | { code: 'AMBIGUOUS_BATCH_ROW'; contentHash: string; count: number }
@@ -29,8 +32,14 @@ export type LongstoneError =
   | { code: 'OWNER_MISMATCH'; expected: string; actual: string }
   | { code: 'REGISTRY_NOT_CONFIGURED'; address: string; chainId: number; detail?: string }
   | { code: 'INSECURE_ENDPOINT'; field: string; detail: string }
+  // The row is already in a batch (stage returned `batched`, or build found no
+  // staged row after every stage replied staged). Not a generic NO_STAGED: the
+  // row is not lost, it is waiting for the TTL or for a confirm of its original
+  // transaction. `contentHash`/`txHash` are null when the path cannot know them.
+  | { code: 'STAGING_BATCHED'; contentHash: `0x${string}` | null; txHash: `0x${string}` | null; detail?: string }
   // gateway transport / business
-  | { code: 'GATE_UNREACHABLE' | 'GATE_REJECTED'; gateCode?: string; detail?: string }
+  | { code: 'GATE_REJECTED'; gateCode?: string; detail?: string; httpStatus?: number }
+  | { code: 'GATE_UNREACHABLE'; detail?: string }
   | { code: 'UNKNOWN_REVERT'; selector: `0x${string}` }
   // local
   | { code: 'NO_KEY'; detail: string }
@@ -72,6 +81,18 @@ export function describe(error: LongstoneError): string {
       );
     case 'PREDECESSOR_UNKNOWN':
       return `${error.which} references a commitment that does not exist on chain`;
+    case 'DUPLICATE_COMMITMENT':
+      return error.detail === undefined ? error.code : `${error.code}: ${error.detail}`;
+    case 'TX_REVERTED':
+      return (
+        `transaction ${error.txHash} reverted on chain; nothing was anchored ` +
+        '(deterministic failure — do not retry the same batch unchanged)'
+      );
+    case 'STAGING_BATCHED': {
+      const guidance =
+        'row already in a batch; wait for the staging TTL or run `longstone confirm --tx-hash`';
+      return error.detail === undefined ? guidance : `${guidance}: ${error.detail}`;
+    }
     case 'STAGED_ROW_MISSING':
       return (
         `no built commitment matches the locally computed content ` +

@@ -49,6 +49,53 @@ Returns `{ cid, commitmentHash, txHash, confirmed }`. `--owner` defaults to the
 signing key's address. Tags are comma-separated; `--prev` names the predecessor
 commitment (the new commitment is its successor).
 
+If the transaction is broadcast and mined but the gateway confirm cannot be
+reached, the command still returns `txHash` with `confirmed: false` and prints a
+warning to stderr — the write happened. Recover with `confirm --tx-hash <hash>`
+below; do not write the same text again while its row is batched.
+
+### put-batch — remember 1-64 facts in one transaction
+
+```bash
+npx -y @limccn/longstone@0.1.1 put-batch \
+  --text "<memory text 1>" \
+  --text "<memory text 2>" \
+  [--text "<memory text 3>" ...] \
+  --tags "layer:deep,topic:prefs" \
+  [--prev 0x<commitment-hash>] \
+  [--owner 0x<owner-address>]
+```
+
+Returns `{ items: [{ cid, commitmentHash }, ...], txHash, confirmed }` in the
+same order as the `--text` arguments. One capability, one build, one signature
+and one `commitBatch`: the batch is atomic (all items anchor or none do).
+Limits: 1-64 texts; duplicate content in one batch is rejected before signing;
+`--tags` is shared by every item (per-item tags are not supported in v1). Every
+row shares the same `--prev` (default 0); rows are **not** auto-chained to each
+other inside a batch. Any item already anchored fails as `DUPLICATE_COMMITMENT`;
+an item already in another batch fails as `STAGING_BATCHED` with its
+`contentHash` and, when listable, `txHash` — wait for the staging TTL or run
+`confirm --tx-hash`.
+
+Per-item `verify` is not embedded in the write; verify each returned `cid` /
+`commitmentHash` after anchoring.
+
+### confirm — recover a broadcast but unconfirmed write
+
+```bash
+npx -y @limccn/longstone@0.1.1 confirm \
+  --tx-hash 0x<transaction-hash> \
+  [--owner 0x<owner-address>]
+```
+
+Calls the gateway's confirm endpoint with bounded backoff on transport failures
+(fetch/429/5xx). Owner resolution: explicit `--owner`, else the signing key's
+address — no key is required when `--owner` is supplied. Prints the gateway's
+`ConfirmOutcome` (`anchored`, `rejected`, or `pending`). If the gateway is still
+unreachable the command exits 1 with `GATE_UNREACHABLE`, but the transaction is
+still recoverable by rerunning the command later. This is the recovery path for
+a `put`/`put-batch` result that returned `confirmed: false`.
+
 ### get — recall
 
 ```bash
@@ -150,6 +197,19 @@ are the JSON objects below. A failure is `isError: true` with a JSON
 ```
 
 `prev` and `owner` are optional.
+
+### memory_put_batch
+
+```json
+{ "texts": ["<memory text 1>", "<memory text 2>"], "tags": ["layer:deep", "topic:prefs"], "prev": "0x<commitment-hash>", "owner": "0x<owner-address>" }
+```
+
+Stores 1-64 memories in one transaction with the same rules as `put-batch`:
+shared tags/prev, atomic commit, duplicate content rejected before signing, and
+the same `STAGING_BATCHED` / `DUPLICATE_COMMITMENT` failures. Returns
+`{ items, txHash, confirmed }`. `tags`, `prev`, and `owner` are optional. Only
+registered when the server is writable; there is no `memory_confirm` tool — use
+the CLI `confirm --tx-hash` to recover.
 
 ### memory_get
 

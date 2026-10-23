@@ -11,9 +11,11 @@ import { Command } from 'commander';
 import { acl } from './commands/acl.js';
 import { get } from './commands/get.js';
 import { put } from './commands/put.js';
+import { putMany } from './commands/put-batch.js';
 import { retract } from './commands/retract.js';
 import { stageStatus } from './commands/stage-status.js';
 import { verify } from './commands/verify.js';
+import { confirmWithRetry } from './confirm.js';
 import { loadConfig, saveConfig, type LongstoneConfig } from './config.js';
 import { surfaceText } from './error-surface.js';
 import { pickSigningAccount, warnThrowawayKey } from './keybox.js';
@@ -73,6 +75,66 @@ program
             account,
           },
         );
+      });
+      emit(result);
+    } catch (error) {
+      handleError(error);
+    }
+  });
+
+program
+  .command('put-batch')
+  .description('stage, build, sign and anchor 1-64 memories in one transaction')
+  .option(
+    '--text <text>',
+    'memory text (repeatable; 1-64 items share one transaction)',
+    (value: string, previous: string[]) => [...previous, value],
+    [],
+  )
+  .option(
+    '--tags <tags>',
+    'comma-separated tags shared by every item',
+    (value) => value.split(',').filter(Boolean),
+  )
+  .option(
+    '--prev <hash>',
+    'predecessor commitment hash applied to every row (rows are not chained to each other)',
+  )
+  .option('--owner <address>', 'owner address (defaults to the signing key)')
+  .action(async (options) => {
+    try {
+      const result = await withContext('signer', async (ctx) => {
+        const account = ctx.keys!.signer!;
+        return putMany(
+          { config: ctx.config, gate: ctx.gate, registry: ctx.registry },
+          {
+            intents: (options.text as string[]).map((text) => ({ text })),
+            tags: options.tags ?? [],
+            ...(options.prev === undefined ? {} : { prev: options.prev as `0x${string}` }),
+            owner: (options.owner ?? account.address) as `0x${string}`,
+            account,
+          },
+        );
+      });
+      emit(result);
+    } catch (error) {
+      handleError(error);
+    }
+  });
+
+program
+  .command('confirm')
+  .description('re-confirm a broadcast write with the gateway (recovery for a failed confirm)')
+  .requiredOption('--tx-hash <hash>', 'transaction hash returned by put or put-batch')
+  .option(
+    '--owner <address>',
+    'owner address (defaults to the signing key; no key is needed when supplied)',
+  )
+  .action(async (options) => {
+    try {
+      const result = await withContext(options.owner === undefined ? 'signer' : false, async (ctx) => {
+        const owner = (options.owner ?? pickSigningAccount(ctx.keys!).address) as `0x${string}`;
+        return confirmWithRetry(ctx.gate, { owner, txHash: options.txHash as `0x${string}` });
       });
       emit(result);
     } catch (error) {

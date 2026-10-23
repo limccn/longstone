@@ -21,6 +21,7 @@ const EXPECTED_TOOLS = [
   'memory_acl',
   'memory_get',
   'memory_put',
+  'memory_put_batch',
   'memory_retract',
   'memory_stage_status',
   'memory_verify',
@@ -119,6 +120,10 @@ describe('MCP server', () => {
       });
     }
     expect(tools.memory_put?.annotations).toEqual({ readOnlyHint: false, destructiveHint: false });
+    expect(tools.memory_put_batch?.annotations).toEqual({
+      readOnlyHint: false,
+      destructiveHint: false,
+    });
     expect(tools.memory_retract?.annotations).toEqual({
       readOnlyHint: false,
       destructiveHint: true,
@@ -127,6 +132,24 @@ describe('MCP server', () => {
       readOnlyHint: false,
       destructiveHint: true,
     });
+  });
+
+  it('registers memory_put_batch only in writable mode', () => {
+    // AC-6: the batch write is additive, shares the put path, and must not leak
+    // into read-only mode. There is no memory_confirm tool in this task.
+    const batch = registeredTools().memory_put_batch;
+    expect(batch).toBeDefined();
+    expect(registeredTools(createMcpServer({ readOnly: true })).memory_put_batch).toBeUndefined();
+    expect(registeredTools().memory_confirm).toBeUndefined();
+
+    // The schema is present and names the shared-tags batch argument set.
+    const schema = batch?.inputSchema as { def?: { shape?: Record<string, unknown> } };
+    expect(Object.keys(schema.def?.shape ?? {}).sort()).toEqual([
+      'owner',
+      'prev',
+      'tags',
+      'texts',
+    ]);
   });
 });
 
@@ -186,7 +209,7 @@ describe('destructive tool confirmation (MRTR)', () => {
 });
 
 describe('stdio entry is reachable and answers', () => {
-  it('`longstone serve` completes initialize and lists six tools', async () => {
+  it('`longstone serve` completes initialize and lists the documented tools', async () => {
     // The PRD AC is that the MCP server "answers tools/list". Before this test
     // no entry point called `serveMcp`, so the server existed but could never
     // be started — the AC was unverified rather than passing.

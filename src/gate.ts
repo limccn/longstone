@@ -93,15 +93,29 @@ export function createHttpGate(config: LongstoneConfig): GateClient {
   }
 
   async function jsonBody(response: Response): Promise<unknown> {
-    const body = (await response.json()) as { code?: string; detail?: string };
     if (!response.ok) {
+      // A proxy or load balancer answers 429/5xx with HTML or plain text.
+      // `response.json()` would throw a bare SyntaxError, losing the status the
+      // confirm retry helper branches on; classify by status instead.
+      const text = await response.text();
+      let parsed: { code?: unknown; detail?: unknown } = {};
+      try {
+        const value: unknown = text === '' ? {} : JSON.parse(text);
+        // `null` and bare primitives are valid JSON but carry no code/detail.
+        // Reading a property off them would throw a TypeError and lose the very
+        // status this path exists to preserve.
+        if (value !== null && typeof value === 'object') parsed = value as typeof parsed;
+      } catch {
+        // Non-JSON error body: keep the status and a readable detail.
+      }
       fail({
         code: 'GATE_REJECTED',
-        ...(body.code === undefined ? {} : { gateCode: body.code }),
-        ...(body.detail === undefined ? {} : { detail: body.detail }),
+        ...(typeof parsed.code === 'string' ? { gateCode: parsed.code } : {}),
+        detail: typeof parsed.detail === 'string' ? parsed.detail : `HTTP ${response.status}`,
+        httpStatus: response.status,
       });
     }
-    return body;
+    return (await response.json()) as unknown;
   }
 
   return {
@@ -160,10 +174,20 @@ export function createHttpGate(config: LongstoneConfig): GateClient {
     async fetchContent(cid) {
       const response = await request(`/v1/content?cid=${encodeURIComponent(cid)}`);
       if (response.status === 404) {
-        fail({ code: 'GATE_REJECTED', gateCode: 'CONTENT_NOT_FOUND', detail: cid });
+        fail({
+          code: 'GATE_REJECTED',
+          gateCode: 'CONTENT_NOT_FOUND',
+          detail: cid,
+          httpStatus: 404,
+        });
       }
       if (!response.ok) {
-        fail({ code: 'GATE_REJECTED', gateCode: 'GATEWAY_UPSTREAM', detail: String(response.status) });
+        fail({
+          code: 'GATE_REJECTED',
+          gateCode: 'GATEWAY_UPSTREAM',
+          detail: String(response.status),
+          httpStatus: response.status,
+        });
       }
       return new Uint8Array(await response.arrayBuffer());
     },

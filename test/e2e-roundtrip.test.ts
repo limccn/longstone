@@ -20,7 +20,13 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { createGateway } from '@limccn/hisaishi-gateway/local';
-import { memoryRegistryAbi } from '@limccn/menhir-core';
+import {
+  canonicalBytes,
+  cidDigest,
+  contentHash,
+  memoryRegistryAbi,
+  parseMemoryContent,
+} from '@limccn/menhir-core';
 import { createPublicClient, createWalletClient, http, parseEventLogs } from 'viem';
 import { baseSepolia } from 'viem/chains';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -29,6 +35,7 @@ import { loadConfig, type LongstoneConfig } from '../src/config.js';
 import { createEmbeddedGate } from '../src/gate.js';
 import { createRegistry } from '../src/registry.js';
 import { put } from '../src/commands/put.js';
+import { putMany } from '../src/commands/put-batch.js';
 import { verify } from '../src/commands/verify.js';
 import { scanOwner } from '../src/indexer.js';
 
@@ -238,9 +245,86 @@ describe('M1 roundtrip: put → anchor → fetch → verify', () => {
     expect(entry.commitment.contentHash).toBe(
       (await registry.getCommitment(commitmentHashValue)).contentHash,
     );
-    void parseEventLogs;
     void client;
   }, 60_000);
+
+  it('put-batch anchors three memories in one transaction, each verifiable', async () => {
+    const gate = createEmbeddedGate(gateway.handle);
+    const texts = [
+      'batch e2e 2026-10-23 — item 1/3',
+      'batch e2e 2026-10-23 — item 2/3',
+      'batch e2e 2026-10-23 — item 3/3',
+    ];
+
+    const result = await putMany(
+      {
+        config,
+        gate,
+        registry,
+        waitForReceipt: async (_cfg, txHash) => {
+          const client = createPublicClient({ transport: http(RPC) });
+          return client.getTransactionReceipt({ hash: txHash });
+        },
+      },
+      {
+        intents: texts.map((text) => ({ text })),
+        tags: ['layer:deep', 'topic:batch'],
+        owner: ownerAddress,
+        account: { address: signerAddress, type: 'json-rpc' } as never,
+      },
+    );
+
+    expect(result.confirmed).toBe(true);
+    expect(result.txHash).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(result.items).toHaveLength(3);
+
+    // AC-1: one transaction carried exactly the three returned commitments.
+    // Parsing the logs (rather than counting them) ties each result item to
+    // this receipt, so a regression that broadcasts per item cannot pass.
+    const receipt = await createPublicClient({ transport: http(RPC) }).getTransactionReceipt({
+      hash: result.txHash,
+    });
+    const committed = parseEventLogs({
+      abi: memoryRegistryAbi,
+      logs: receipt.logs,
+      eventName: 'MemoryCommitted',
+    });
+    expect(committed).toHaveLength(3);
+    expect(committed.map((log) => log.args.commitmentHash)).toEqual(
+      result.items.map((item) => item.commitmentHash),
+    );
+
+    const seen = new Set<string>();
+    for (const [index, item] of result.items.entries()) {
+      expect(seen.has(item.commitmentHash)).toBe(false);
+      seen.add(item.commitmentHash);
+
+      // AC-2: each returned hash maps back to the text at the same index, and
+      // the on-chain struct carries the real signer (stamping happened).
+      const stored = await registry.getCommitment(item.commitmentHash);
+      const content = parseMemoryContent({ text: texts[index]!, format: 'text.v0' });
+      expect(stored.contentHash).toBe(contentHash(content));
+      expect(stored.cidDigest).toBe(cidDigest(canonicalBytes(content)));
+      expect(stored.signer.toLowerCase()).toBe(signerAddress.toLowerCase());
+      expect(await registry.isDeep(item.commitmentHash)).toBe(true);
+      expect(await registry.isActive(item.commitmentHash)).toBe(true);
+
+      // Per-item verify is the acceptance step, not part of the write. The dev
+      // pin adapter stores no bytes, so the fetch may fail; the chain side is
+      // asserted above and must never be the failing side.
+      const report = await verify(
+        { gate, registry },
+        { cid: item.cid, commitmentHash: item.commitmentHash, owner: ownerAddress },
+      ).catch((error: unknown) => error as Error);
+      if (report instanceof Error) {
+        expect(report.message).toMatch(/GATE|gateway|CONTENT/i);
+      } else {
+        expect(report.anchored).toBe(true);
+        expect(report.hashMatch).toBe(true);
+        expect(report.digestMatch).toBe(true);
+      }
+    }
+  }, 120_000);
 
   it('verify reports the chain state even when bytes are unavailable', async () => {
     const gate = createEmbeddedGate(gateway.handle);

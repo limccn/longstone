@@ -24,6 +24,7 @@ import { z } from 'zod';
 import { acl } from './commands/acl.js';
 import { get } from './commands/get.js';
 import { put } from './commands/put.js';
+import { putMany } from './commands/put-batch.js';
 import { retract } from './commands/retract.js';
 import { stageStatus } from './commands/stage-status.js';
 import { verify } from './commands/verify.js';
@@ -160,6 +161,47 @@ export function createMcpServer(
             { config: runtime.config, gate: runtime.gate, registry: runtime.registry },
             {
               text: args.text,
+              tags: args.tags ?? [],
+              ...(args.prev === undefined ? {} : { prev: args.prev as `0x${string}` }),
+              owner: (args.owner ?? account.address) as `0x${string}`,
+              account,
+            },
+          );
+          return { content: [{ type: 'text' as const, text: JSON.stringify(toJson(result)) }] };
+        } catch (error) {
+          return toolError(error);
+        } finally {
+          await runtime.close();
+        }
+      },
+    );
+
+    server.registerTool(
+      'memory_put_batch',
+      {
+        description:
+          'Store 1-64 memories in one batch: one capability, one build, one local signature and one transaction. Every item shares the same tags and prev; rows are not chained to each other. Returns each cid/commitmentHash plus the shared txHash.',
+        inputSchema: {
+          texts: z.array(z.string().min(1)).min(1).max(64),
+          tags: z.array(z.string()).optional(),
+          prev: BYTES32.optional(),
+          owner: ADDRESS.optional(),
+        },
+        annotations: PUT_ANNOTATIONS,
+      },
+      async (args: {
+        texts: string[];
+        tags?: string[] | undefined;
+        prev?: string | undefined;
+        owner?: string | undefined;
+      }) => {
+        const runtime = await createContext({ config: loadConfig(), requireKeys: 'signer' });
+        try {
+          const account = runtime.keys!.signer!;
+          const result = await putMany(
+            { config: runtime.config, gate: runtime.gate, registry: runtime.registry },
+            {
+              intents: args.texts.map((text) => ({ text })),
               tags: args.tags ?? [],
               ...(args.prev === undefined ? {} : { prev: args.prev as `0x${string}` }),
               owner: (args.owner ?? account.address) as `0x${string}`,

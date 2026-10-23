@@ -10,12 +10,14 @@ hands its key to a server.
 ## What it does
 
 ```
-put     canonicalize → stage (keyless gateway) → build → stamp → sign → broadcast → confirm
-get     list staging rows + indexed on-chain commitments with deep/active state
-verify  fetch bytes → check BOTH digests → check on-chain state
-retract tombstone a commitment, optionally naming its successor
-acl     grant/revoke a delegated signer's role mask (owner key)
-config  show or update configuration
+put        canonicalize → stage (keyless gateway) → build → stamp → sign → broadcast → confirm
+put-batch  the same flow for 1-64 memories: one capability, one signature, one transaction
+get        list staging rows + indexed on-chain commitments with deep/active state
+verify     fetch bytes → check BOTH digests → check on-chain state
+retract    tombstone a commitment, optionally naming its successor
+confirm    re-confirm a broadcast transaction with the gateway (recovery)
+acl        grant/revoke a delegated signer's role mask (owner key)
+config     show or update configuration
 ```
 
 `verify` works with the gateway unreachable (`--direct`): chain state plus the
@@ -98,6 +100,8 @@ $env:LONGSTONE_KEY = '<funded testnet key>'
 
 node dist/cli.js acl grant --owner 0x<owner> --signer 0x<delegated> --roles commit
 node dist/cli.js put --text "用户偏好：Python 用于脚本" --tags layer:deep,topic:prefs
+node dist/cli.js put-batch --text "fact one" --text "fact two" --text "fact three" --tags layer:deep,topic:batch
+node dist/cli.js confirm --tx-hash 0x<transaction-hash>
 node dist/cli.js get --owner 0x<owner> --active-only
 node dist/cli.js verify --cid bafkrei... --commitment-hash 0x...
 node dist/cli.js stage-status --owner 0x<owner>
@@ -120,10 +124,12 @@ Output is JSON on stdout; the key banner and progress go to stderr, so
 }
 ```
 
-Tools: `memory_put`, `memory_get`, `memory_verify`, `memory_retract`,
-`memory_acl`, `memory_stage_status`. Tool failures return a typed `code`, not a
-raw revert string. Every tool carries MCP annotations (`readOnlyHint`,
-`destructiveHint`, `openWorldHint`).
+Tools: `memory_put`, `memory_put_batch`, `memory_get`, `memory_verify`,
+`memory_retract`, `memory_acl`, `memory_stage_status`. Tool failures return a
+typed `code`, not a raw revert string. Every tool carries MCP annotations
+(`readOnlyHint`, `destructiveHint`, `openWorldHint`). There is no
+`memory_confirm` tool: a broadcast-but-unconfirmed write is recovered with the
+CLI `confirm --tx-hash`.
 
 ### MCP safety mode
 
@@ -133,7 +139,7 @@ memory.
 
 - **Read-only mode.** `LONGSTONE_MCP_READ_ONLY=1` registers only `memory_get`,
   `memory_verify`, and `memory_stage_status`. Unset, empty, or `0` registers all
-  six tools (the 0.1.x default). Any other value is an error — the server refuses
+  seven tools (the 0.1.x default). Any other value is an error — the server refuses
   to start rather than guessing.
 - **Destructive tools ask first.** `memory_retract` and `memory_acl`
   `grant`/`revoke` carry `destructiveHint` and use the MCP 2026-07-28
@@ -147,8 +153,8 @@ memory.
   `server.json` (npm registry, stdio transport, `serve` argument) for the MCP
   Registry listing.
 
-`memory_put` is additive rather than destructive (`destructiveHint: false`), but
-it still spends gas.
+`memory_put` and `memory_put_batch` are additive rather than destructive
+(`destructiveHint: false`), but they still spend gas.
 
 ## Agent and IDE surfaces
 
@@ -170,12 +176,21 @@ a host opens the project, so it must be reviewed like code.
    the browser and the seed script use.
 2. `put` generates a 128-bit staging capability and sends it to the gateway with
    the content. The keyless gateway stages it, recomputes both digests, and pins it.
+   `put-batch` uses **one** capability for all 1-64 items: every row is staged
+   under it, one `build` returns them all, and one `commitBatch` anchors them
+   atomically. All rows share the same `prev` (default 0); rows are not chained
+   to each other inside a batch.
 3. `build` selects only rows staged under that capability and returns them with
    **placeholders**: `prev = 0`, `blockHeight = 0`, `signer = 0x0`.
 4. longstone keeps only the commitment whose owner/contentHash/cidDigest match
    the values it computed locally; it never signs whatever the gateway returned.
+   In a batch this check runs for every item, and any stage status other than
+   `staged` aborts before a signature is produced.
 5. longstone overwrites all three placeholders, then signs locally and broadcasts.
-6. `confirm` makes **one** receipt call; longstone drives any retry.
+6. `confirm` makes **one** receipt call; longstone drives any retry. A transport
+   failure there (fetch/429/5xx) becomes `confirmed: false` with the `txHash`
+   preserved, not a failed write; recover with `confirm --tx-hash`. A reverted
+   receipt is different: it is a typed `TX_REVERTED`, never a recoverable result.
 
 A missed `signer` stamp reverts loudly (`SignerMismatch`). A missed
 `prev`/`blockHeight` would anchor wrong metadata silently, which is why
@@ -196,13 +211,13 @@ stamping is one function with its own tests rather than three assignments.
 ## Tests
 
 ```powershell
-pnpm test          # 65 tests, incl. a full roundtrip against a real Hardhat node
+pnpm test          # 162 tests, incl. a full roundtrip against a real Hardhat node
 pnpm typecheck
 ```
 
 The roundtrip deploys the real contract, runs put → anchor → event/indexer
-agreement → sovereign verify, and uses the node's unlocked accounts so **no
-private key appears in the test file**.
+agreement → a three-item `put-batch` in one transaction → sovereign verify, and
+uses the node's unlocked accounts so **no private key appears in the test file**.
 
 ## Known limits (M1)
 
