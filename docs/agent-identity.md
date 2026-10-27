@@ -103,7 +103,7 @@ agent's memory service; it does not give 8004 any say over the memories.
   "description": "<what this agent remembers, and for whom>",
   "image": "<url>",
   "services": [
-    { "name": "MCP", "endpoint": "<longstone MCP invocation or hosted descriptor>", "version": "0.1.1" },
+    { "name": "MCP", "endpoint": "<longstone MCP invocation or hosted descriptor>", "version": "0.1.2" },
     { "name": "web", "endpoint": "https://longstone-ui.pages.dev" }
   ],
   "x402Support": false,

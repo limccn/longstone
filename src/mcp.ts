@@ -143,13 +143,18 @@ function toolError(error: unknown) {
  *   `resolveReadOnlyMode(env)`.
  * @param options.env Environment to read `LONGSTONE_MCP_READ_ONLY` from;
  *   defaults to `process.env`.
+ * @param options.configPath Config file selected by the host (`longstone
+ *   --config`); defaults to `LONGSTONE_CONFIG` or the user-level file.
  */
 export function createMcpServer(
-  options: { readOnly?: boolean; env?: NodeJS.ProcessEnv } = {},
+  options: { readOnly?: boolean; env?: NodeJS.ProcessEnv; configPath?: string } = {},
 ): McpServer {
   const readOnly = options.readOnly ?? resolveReadOnlyMode(options.env);
+  // Resolve the path through `loadConfig` on each call, so an operator can
+  // edit the file without restarting the MCP host.
+  const getConfig = () => loadConfig(options.configPath);
   const server = new McpServer(
-    { name: 'longstone', version: '0.1.1' },
+    { name: 'longstone', version: '0.1.2' },
     { instructions: MCP_INSTRUCTIONS },
   );
 
@@ -186,7 +191,7 @@ export function createMcpServer(
           return toolError(error);
         }
 
-        const runtime = await createContext({ config: loadConfig(), requireKeys: 'signer' });
+        const runtime = await createContext({ config: getConfig(), requireKeys: 'signer' });
         try {
           const account = runtime.keys!.signer!;
           const result = await put(
@@ -228,7 +233,7 @@ export function createMcpServer(
         prev?: string | undefined;
         owner?: string | undefined;
       }) => {
-        const runtime = await createContext({ config: loadConfig(), requireKeys: 'signer' });
+        const runtime = await createContext({ config: getConfig(), requireKeys: 'signer' });
         try {
           const account = runtime.keys!.signer!;
           const result = await putMany(
@@ -271,7 +276,7 @@ export function createMcpServer(
           );
         }
 
-        const runtime = await createContext({ config: loadConfig(), requireKeys: 'any' });
+        const runtime = await createContext({ config: getConfig(), requireKeys: 'any' });
         try {
           const result = await retract(
             { registry: runtime.registry },
@@ -331,7 +336,7 @@ export function createMcpServer(
         }
 
         const need = args.action === 'list' ? false : ('owner' as const);
-        const runtime = await createContext({ config: loadConfig(), requireKeys: need });
+        const runtime = await createContext({ config: getConfig(), requireKeys: need });
         try {
           const result = await acl(
             { registry: runtime.registry },
@@ -373,7 +378,7 @@ export function createMcpServer(
       activeOnly?: boolean | undefined;
       limit?: number | undefined;
     }) => {
-      const runtime = await createContext({ config: loadConfig(), requireKeys: false });
+      const runtime = await createContext({ config: getConfig(), requireKeys: false });
       try {
         const result = await get(
           { gate: runtime.gate, scan: runtime.scan },
@@ -409,7 +414,7 @@ export function createMcpServer(
     },
     async (args: { cid: string; commitmentHash?: string | undefined; owner?: string | undefined; direct?: boolean | undefined }) => {
       const runtime = await createContext({
-        config: loadConfig(),
+        config: getConfig(),
         requireKeys: false,
         // `--direct` verifies without staging; it still uses the configured
         // dedicated gateway, never a public fallback.
@@ -448,7 +453,7 @@ export function createMcpServer(
       annotations: READ_ANNOTATIONS,
     },
     async (args: { owner: string; status?: string | undefined; limit?: number | undefined }) => {
-      const runtime = await createContext({ config: loadConfig(), requireKeys: false });
+      const runtime = await createContext({ config: getConfig(), requireKeys: false });
       try {
         const result = await stageStatus(
           { gate: runtime.gate },
@@ -478,10 +483,10 @@ export function createMcpServer(
  * reconnects. The factory also re-reads `LONGSTONE_MCP_READ_ONLY` per connection
  * and throws on an invalid value instead of guessing a mode.
  */
-export async function serveMcp(): Promise<void> {
+export async function serveMcp(options: { configPath?: string } = {}): Promise<void> {
   // Resolve once before the transport starts: an invalid value must fail loudly
   // at startup, not answer every request with an opaque internal error.
   resolveReadOnlyMode();
-  await serveStdio(() => createMcpServer());
+  await serveStdio(() => createMcpServer(options));
   process.stderr.write('longstone MCP server ready on stdio\n');
 }

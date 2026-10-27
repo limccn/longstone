@@ -69,11 +69,11 @@ check(patch.includes('serverName: longstone'), 'patch serverName is longstone');
 check(patch.includes('transport: stdio'), 'patch transport is stdio');
 check(patch.includes('command: npx'), 'patch command is npx');
 check(
-  patch.includes("args: ['-y', '@limccn/longstone@0.1.1', 'serve']"),
-  'patch runs the exact @limccn/longstone@0.1.1 pin with serve'
+  patch.includes("args: ['-y', '@limccn/longstone@0.1.2', 'serve']"),
+  'patch runs the exact @limccn/longstone@0.1.2 pin with serve'
 );
 check(
-  !/@limccn\/longstone(?!@0\.1\.1(?![0-9A-Za-z.-]))/.test(patch),
+  !/@limccn\/longstone(?!@0\.1\.2(?![0-9A-Za-z.-]))/.test(patch),
   'patch has no unpinned @limccn/longstone reference'
 );
 check(patch.includes('toolCallTimeoutMs: 120000'), 'patch toolCallTimeoutMs is 120000');

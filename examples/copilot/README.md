@@ -20,7 +20,7 @@ repository runs itself.
 All three files launch the same command:
 
 ```text
-npx -y @limccn/longstone@0.1.1 serve
+npx -y @limccn/longstone@0.1.2 serve
 ```
 
 The version is **exact** on purpose. `npx -y` executes whatever the registry
@@ -39,7 +39,7 @@ and run the smoke test.
     "longstone": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "@limccn/longstone@0.1.1", "serve"]
+      "args": ["-y", "@limccn/longstone@0.1.2", "serve"]
     }
   }
 }
@@ -54,7 +54,7 @@ Both use `mcpServers`; `command` + `args` imply stdio:
   "mcpServers": {
     "longstone": {
       "command": "npx",
-      "args": ["-y", "@limccn/longstone@0.1.1", "serve"]
+      "args": ["-y", "@limccn/longstone@0.1.2", "serve"]
     }
   }
 }
@@ -103,7 +103,7 @@ may add a top-level `inputs` array and put the `env` reference inside the
     "longstone": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "@limccn/longstone@0.1.1", "serve"],
+      "args": ["-y", "@limccn/longstone@0.1.2", "serve"],
       "env": { "LONGSTONE_KEY": "${input:longstoneKey}" }
     }
   }
@@ -127,7 +127,7 @@ github.com, go to **Settings → MCP servers**, and add:
     "longstone": {
       "type": "local",
       "command": "npx",
-      "args": ["-y", "@limccn/longstone@0.1.1", "serve"],
+      "args": ["-y", "@limccn/longstone@0.1.2", "serve"],
       "tools": ["*"],
       "env": {
         "LONGSTONE_KEY": "$COPILOT_MCP_LONGSTONE_KEY"
@@ -182,8 +182,10 @@ appear at the repository root.
 ## Defaults and gateway mode
 
 The default `hisaishiMode` is `embedded`, so a fresh user needs no gateway
-process. Configuration comes from `.longstone/config.json` or environment
-override; do not add one to these examples.
+process. Configuration defaults to `~/.longstone/config.json`; a project
+`.longstone/config.json` is read only when selected with `--config` or
+`LONGSTONE_CONFIG`. Environment overrides still win. Do not add a config file
+to these examples.
 
 A `remote` gateway variant is documented but is **never a default** here. Until
 the H-1 gateway-hardening work lands, a shared remote gateway can inject staging
@@ -201,7 +203,7 @@ directly executable for some launchers), use the `cmd /c` form:
     "longstone": {
       "type": "stdio",
       "command": "cmd",
-      "args": ["/c", "npx", "-y", "@limccn/longstone@0.1.1", "serve"]
+      "args": ["/c", "npx", "-y", "@limccn/longstone@0.1.2", "serve"]
     }
   }
 }

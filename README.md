@@ -24,6 +24,19 @@ config     show or update configuration
 content bytes are sufficient, by design. Expected digests are **always** read
 from `getCommitment`; a gateway row can at most nominate a candidate hash.
 
+## Security status (0.1.1 → 0.1.2)
+
+- **L-8 — project configs are opt-in.** Configuration now defaults to
+  `~/.longstone/config.json`. A `.longstone/config.json` in the working
+  directory is ignored unless selected with `--config <path>` or
+  `LONGSTONE_CONFIG=<path>`; if one exists, a single stderr warning points at
+  it. Before 0.1.2 a cloned repository could redirect `rpcUrl`,
+  `hisaishiBaseUrl`, `registryAddress`, or `chainId`.
+- **L-1 — client redaction boundary.** The existing `fail()` redaction is now
+  pinned by a regression test that injects a credential-bearing URL and fails
+  if the call is removed. Gateway 0.1.2 stops echoing upstream messages in
+  `detail` in the first place.
+
 ## Security status (0.1.0 → 0.1.1)
 
 The published 0.1.0 has two remote-mode vulnerabilities, fixed in 0.1.1:
@@ -49,7 +62,7 @@ use is not affected by the remote prerequisites, but the fixes still apply.
 From npmjs (also on GitHub Packages):
 
 ```bash
-npm install -g @limccn/longstone@0.1.1
+npm install -g @limccn/longstone@0.1.2
 longstone --help
 ```
 
@@ -62,8 +75,20 @@ pnpm build
 
 ## Configure
 
-Configuration lives in `.longstone/config.json` (gitignored). Defaults target
-Base Sepolia:
+Configuration defaults to the user-level `~/.longstone/config.json`. A
+project-local `.longstone/config.json` is **not** read implicitly — select it
+explicitly:
+
+```powershell
+longstone --config .longstone/config.json config
+# or, for hosts that pass environment only:
+$env:LONGSTONE_CONFIG = '.longstone/config.json'
+```
+
+`config set` writes the selected file; without `--config` that is the
+user-level file (or `LONGSTONE_CONFIG` when set), never the cwd. If a project
+config exists but is not selected, the CLI prints one notice on stderr.
+Defaults target Base Sepolia:
 
 ```powershell
 node dist/cli.js config --set rpcUrl=https://sepolia.base.org

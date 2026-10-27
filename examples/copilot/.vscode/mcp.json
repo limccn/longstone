@@ -3,7 +3,7 @@
     "longstone": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "@limccn/longstone@0.1.1", "serve"]
+      "args": ["-y", "@limccn/longstone@0.1.2", "serve"]
     }
   }
 }

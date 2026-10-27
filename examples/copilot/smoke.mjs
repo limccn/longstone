@@ -39,7 +39,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url)); // examples/copilot
 const REPO_ROOT = path.resolve(HERE, '..', '..');
 
 const PACKAGE_NAME = '@limccn/longstone';
-const EXPECTED_VERSION = '0.1.1';
+const EXPECTED_VERSION = '0.1.2';
 const EXPECTED_TOOLS = Object.freeze([
   'memory_acl',
   'memory_get',

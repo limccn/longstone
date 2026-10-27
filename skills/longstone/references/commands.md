@@ -1,13 +1,13 @@
 # longstone command recipes
 
-Targets `@limccn/longstone@0.1.1`. CLI output is JSON on stdout; progress and the
+Targets `@limccn/longstone@0.1.2`. CLI output is JSON on stdout; progress and the
 throwaway-key banner go to stderr. Every recipe is copyable as-is except for the
 `<placeholders>`.
 
 ## Launch the MCP server
 
 ```bash
-npx -y @limccn/longstone@0.1.1 serve
+npx -y @limccn/longstone@0.1.2 serve
 ```
 
 The host must supply `LONGSTONE_KEY` through its environment. Do not add a key
@@ -21,7 +21,7 @@ A portable config needs only the command; the key is inherited:
   "mcpServers": {
     "longstone": {
       "command": "npx",
-      "args": ["-y", "@limccn/longstone@0.1.1", "serve"]
+      "args": ["-y", "@limccn/longstone@0.1.2", "serve"]
     }
   }
 }
@@ -32,13 +32,13 @@ A portable config needs only the command; the key is inherited:
 Run the pinned package without installing:
 
 ```bash
-npx -y @limccn/longstone@0.1.1 <command>
+npx -y @limccn/longstone@0.1.2 <command>
 ```
 
 ### put — remember one fact
 
 ```bash
-npx -y @limccn/longstone@0.1.1 put \
+npx -y @limccn/longstone@0.1.2 put \
   --text "<memory text>" \
   --tags "layer:deep,topic:prefs" \
   [--prev 0x<commitment-hash>] \
@@ -65,7 +65,7 @@ below; do not write the same text again while its row is batched.
 ### put-batch — remember 1-64 facts in one transaction
 
 ```bash
-npx -y @limccn/longstone@0.1.1 put-batch \
+npx -y @limccn/longstone@0.1.2 put-batch \
   --text "<memory text 1>" \
   --text "<memory text 2>" \
   [--text "<memory text 3>" ...] \
@@ -91,7 +91,7 @@ Per-item `verify` is not embedded in the write; verify each returned `cid` /
 ### confirm — recover a broadcast but unconfirmed write
 
 ```bash
-npx -y @limccn/longstone@0.1.1 confirm \
+npx -y @limccn/longstone@0.1.2 confirm \
   --tx-hash 0x<transaction-hash> \
   [--owner 0x<owner-address>]
 ```
@@ -107,7 +107,7 @@ a `put`/`put-batch` result that returned `confirmed: false`.
 ### get — recall
 
 ```bash
-npx -y @limccn/longstone@0.1.1 get \
+npx -y @limccn/longstone@0.1.2 get \
   --owner 0x<owner-address> \
   [--active-only] \
   [--tag <tag>] \
@@ -121,6 +121,8 @@ Returns `{ staged, indexed }`. Each indexed row carries `commitmentHash`,
 Full-history scans start at `scanChunkBlocks` (default 200) and grow after three
 consecutive successes up to `scanMaxChunkBlocks` (default 10000); set both with
 `longstone config --set scanChunkBlocks=<n>` / `--set scanMaxChunkBlocks=<n>`.
+`config --set` writes the selected config file: user-level by default, or the
+`--config <path>` file when given.
 On a public RPC a full scan is slow and may hit 429s — use a dedicated RPC for
 large owners. `verify --cid --owner` uses the same scanner.
 
@@ -128,18 +130,18 @@ large owners. `verify --cid --owner` uses the same scanner.
 
 ```bash
 # O(1): the commitment hash is known
-npx -y @limccn/longstone@0.1.1 verify \
+npx -y @limccn/longstone@0.1.2 verify \
   --cid <cid> \
   --commitment-hash 0x<commitment-hash> \
   [--owner 0x<owner-address>]
 
 # resolve the commitment by scanning the owner's chain events
-npx -y @limccn/longstone@0.1.1 verify \
+npx -y @limccn/longstone@0.1.2 verify \
   --cid <cid> \
   --owner 0x<owner-address>
 
 # fetch bytes from the configured dedicated IPFS gateway instead of hisaishi
-npx -y @limccn/longstone@0.1.1 verify \
+npx -y @limccn/longstone@0.1.2 verify \
   --cid <cid> \
   --commitment-hash 0x<commitment-hash> \
   --direct
@@ -166,7 +168,7 @@ was found — not where the compared values came from.
 ### retract — tombstone (destructive)
 
 ```bash
-npx -y @limccn/longstone@0.1.1 retract \
+npx -y @limccn/longstone@0.1.2 retract \
   --commitment-hash 0x<commitment-hash> \
   [--replaced-by 0x<successor-commitment-hash>]
 ```
@@ -178,16 +180,16 @@ retract is a no-op on chain.
 
 ```bash
 # inspect
-npx -y @limccn/longstone@0.1.1 acl list \
+npx -y @limccn/longstone@0.1.2 acl list \
   --owner 0x<owner-address> --signer 0x<signer-address>
 
 # grant (default role: commit)
-npx -y @limccn/longstone@0.1.1 acl grant \
+npx -y @limccn/longstone@0.1.2 acl grant \
   --owner 0x<owner-address> --signer 0x<signer-address> \
   [--roles commit,retract]
 
 # revoke all roles
-npx -y @limccn/longstone@0.1.1 acl revoke \
+npx -y @limccn/longstone@0.1.2 acl revoke \
   --owner 0x<owner-address> --signer 0x<signer-address>
 ```
 
@@ -197,7 +199,7 @@ explicit user intent.
 ### stage-status — staging only
 
 ```bash
-npx -y @limccn/longstone@0.1.1 stage-status \
+npx -y @limccn/longstone@0.1.2 stage-status \
   --owner 0x<owner-address> \
   [--status staged|batched|anchored|rejected] \
   [--limit <n>]
@@ -207,7 +209,7 @@ Works when the chain is unreachable; returns `{ rows }`.
 
 ## MCP tools
 
-Launch shape: `npx -y @limccn/longstone@0.1.1 serve` over stdio. Tool arguments
+Launch shape: `npx -y @limccn/longstone@0.1.2 serve` over stdio. Tool arguments
 are the JSON objects below. A failure is `isError: true` with a JSON
 `{ "code": ... }` body — branch on `code` (see `errors.md`).
 

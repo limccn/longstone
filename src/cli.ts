@@ -23,7 +23,13 @@ import { pickSigningAccount, warnThrowawayKey } from './keybox.js';
 import { createContext } from './context.js';
 
 const program = new Command();
-program.name('longstone').description('Sovereign agent memory client (MCP + CLI)').version('0.1.1');
+program
+  .name('longstone')
+  .description('Sovereign agent memory client (MCP + CLI)')
+  .version('0.1.2')
+  // Project configs are opt-in (L-8): the default is the user-level file, so a
+  // cloned repository cannot redirect endpoints through `.longstone/`.
+  .option('--config <path>', 'config file (default: ~/.longstone/config.json)');
 
 function emit(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value, replacer)}\n`);
@@ -38,7 +44,10 @@ async function withContext<T>(
   requireKeys: import('./keybox.js').KeyNeed,
   fn: (ctx: Awaited<ReturnType<typeof createContext>>) => Promise<T>,
 ): Promise<T> {
-  const ctx = await createContext({ config: loadConfig(), requireKeys });
+  const ctx = await createContext({
+    config: loadConfig(program.opts().config as string | undefined),
+    requireKeys,
+  });
   try {
     if (ctx.keys !== null) warnThrowawayKey(pickSigningAccount(ctx.keys).address);
     return await fn(ctx);
@@ -331,7 +340,8 @@ program
   .option('--set <key=value...>', 'set one or more keys', (v, acc: string[]) => [...acc, v], [])
   .action(async (options) => {
     try {
-      const config = loadConfig();
+      const configPath = program.opts().config as string | undefined;
+      const config = loadConfig(configPath);
       if ((options.set as string[]).length === 0) {
         emit(config);
         return;
@@ -379,7 +389,7 @@ program
             throw new Error(`unknown config key: ${key}`);
         }
       }
-      saveConfig(next);
+      saveConfig(next, configPath);
       emit(next);
     } catch (error) {
       handleError(error);
@@ -394,7 +404,8 @@ program
       // Imported lazily: a CLI invocation that never serves should not pay the
       // MCP SDK's import cost, and a broken SDK should not break `longstone --help`.
       const { serveMcp } = await import('./mcp.js');
-      await serveMcp();
+      const configPath = program.opts().config as string | undefined;
+      await serveMcp(configPath === undefined ? {} : { configPath });
     } catch (error) {
       handleError(error);
     }

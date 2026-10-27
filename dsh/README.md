@@ -3,7 +3,7 @@
 A DeepSeek Harness (DSH) plugin bundle that exposes longstone's MCP memory
 server to a DSH profile. It contains no native plugin code: `cordis.patch.yml`
 inserts one row for the official `@deepseek-ai/dsh-mcp-client`, pointed at
-`npx @limccn/longstone@0.1.1 serve`.
+`npx @limccn/longstone@0.1.2 serve`.
 
 ## Preview status
 
@@ -45,14 +45,14 @@ dsh --profile <name> --dump-config
 
 The dump must contain the inserted row: id `longstone-memory`, name
 `@deepseek-ai/dsh-mcp-client`, `serverName: longstone`, `transport: stdio`,
-`command: npx`, and args `['-y', '@limccn/longstone@0.1.1', 'serve']`.
+`command: npx`, and args `['-y', '@limccn/longstone@0.1.2', 'serve']`.
 
 After the profile boots, longstone's tools appear as `mcp__longstone__*`:
 `mcp__longstone__memory_put`, `mcp__longstone__memory_get`,
 `mcp__longstone__memory_verify`, `mcp__longstone__memory_retract`,
 `mcp__longstone__memory_acl`, `mcp__longstone__memory_stage_status`.
 
-The version is pinned exactly (`@limccn/longstone@0.1.1`); `npx -y` downloads
+The version is pinned exactly (`@limccn/longstone@0.1.2`); `npx -y` downloads
 that version on first boot and reuses the npx cache afterwards.
 
 ## Key channel
@@ -90,7 +90,7 @@ node test.mjs
 ```
 
 Dependency-free checks: the `dsh.bundle.patch` pointer, the exact MCP-client
-row and 0.1.1 pin, and the absence of key material (`LONGSTONE_OWNER_KEY`,
+row and 0.1.2 pin, and the absence of key material (`LONGSTONE_OWNER_KEY`,
 a `LONGSTONE_KEY:` assignment, or a 64-hex literal) in the published files.
 
 ## License

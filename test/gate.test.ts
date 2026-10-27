@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULTS } from '../src/config.js';
 import { LongstoneFailure } from '../src/errors.js';
+import { surfaceJson, surfaceText } from '../src/error-surface.js';
 import { createHttpGate } from '../src/gate.js';
 
 const CONFIG = { ...DEFAULTS, hisaishiBaseUrl: 'http://127.0.0.1:9' };
@@ -106,6 +107,28 @@ describe('createHttpGate — non-JSON error bodies', () => {
       detail: 'upstream 429',
       httpStatus: 502,
     });
+  });
+
+  it('redacts credentials, path and query from a gateway detail (L-1)', async () => {
+    // Defence in depth for the client boundary: even if a gateway version in
+    // the wild still echoes a credential-bearing URL, stderr and MCP results
+    // must not. Removing `redactError` from `fail()` makes this test fail.
+    const secret = 'https://user:pass@rpc.example/v2/SECRET?token=abc';
+    stubFetch(
+      new Response(JSON.stringify({ code: 'GATEWAY_UPSTREAM', detail: secret }), {
+        status: 502,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    const failure = await failureOf(stage());
+    for (const output of [surfaceText(failure), surfaceJson(failure)]) {
+      expect(output).not.toContain('user:pass');
+      expect(output).not.toContain('SECRET');
+      expect(output).not.toContain('token=abc');
+      expect(output).not.toContain('/v2/');
+      expect(output).toContain('rpc.example');
+    }
   });
 
   it('leaves a success body unchanged', async () => {

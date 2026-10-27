@@ -72,4 +72,4 @@ Keep sensitive material out of memory.
 - [Depth model](./references/depth-model.md) — `deep` vs `active`, and what
   `retract` does and does not do.
 
-Version: this skill targets `@limccn/longstone@0.1.1`.
+Version: this skill targets `@limccn/longstone@0.1.2`.

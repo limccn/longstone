@@ -1,6 +1,6 @@
 # longstone Agent Skill
 
-The open-format Agent Skill for `@limccn/longstone@0.1.1`: durable memory, recall
+The open-format Agent Skill for `@limccn/longstone@0.1.2`: durable memory, recall
 with on-chain proof, and verification of a claimed memory.
 
 ## Install
@@ -21,13 +21,12 @@ installs it for the agent you select. Add `-a <agent>` to target one host
 
 ## Version and tag
 
-- This skill targets **0.1.1**, and every recipe pins
-  `npx -y @limccn/longstone@0.1.1`.
-- The `v0.1.1` tag predates `skills/`; the skill ships from the
+- This skill targets **0.1.2**, and every recipe pins
+  `npx -y @limccn/longstone@0.1.2`.
+- The `v0.1.1` tag predates `skills/`; the skill first shipped from the
   **`v0.1.1-skills`** tag, which contains this directory. From then on it
-  changes in the same release as the CLI/MCP tool schemas. The CLI package
-  version remains 0.1.1; the tag marks the skill release, not a new npm
-  version.
+  changes in the same release as the CLI/MCP tool schemas, and each skill tag
+  names the client version it documents.
 - `npx skills add limccn/longstone` resolves the repository's default branch, so a
   later install can pick up newer content. That moving-branch risk is why updates
   must be reviewed.

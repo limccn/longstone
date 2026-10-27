@@ -6,8 +6,9 @@
  * shared and committed by accident.
  */
 
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 
 import { fail } from './errors.js';
 
@@ -57,11 +58,71 @@ export const DEFAULTS: LongstoneConfig = {
 
 export const CONFIG_PATH = '.longstone/config.json';
 
-export function loadConfig(path = CONFIG_PATH, env: NodeJS.ProcessEnv = process.env): LongstoneConfig {
+/** Test hook: the project-config warning is once per process by design. */
+let warnedProjectConfig = false;
+
+export function resetConfigWarningForTests(): void {
+  warnedProjectConfig = false;
+}
+
+/** The user-level default: `~/.longstone/config.json`, never the cwd. */
+export function userConfigPath(home = homedir()): string {
+  return join(home, '.longstone', 'config.json');
+}
+
+/** The project location — read only when selected explicitly (L-8). */
+export function projectConfigPath(cwd = process.cwd()): string {
+  return join(cwd, '.longstone', 'config.json');
+}
+
+/**
+ * CLI flag > `LONGSTONE_CONFIG` > user-level file. There is deliberately no
+ * cwd fallback: a cloned repository must not be able to redirect chain or
+ * gateway endpoints.
+ */
+export function resolveConfigPath(
+  explicit?: string,
+  env: NodeJS.ProcessEnv = process.env,
+  home = homedir(),
+): { path: string; source: 'explicit' | 'env' | 'user' } {
+  if (explicit !== undefined && explicit !== '') return { path: explicit, source: 'explicit' };
+  const fromEnv = env.LONGSTONE_CONFIG;
+  if (fromEnv !== undefined && fromEnv !== '') return { path: fromEnv, source: 'env' };
+  return { path: userConfigPath(home), source: 'user' };
+}
+
+function defaultWarn(message: string): void {
+  process.stderr.write(`${message}\n`);
+}
+
+export function loadConfig(
+  path?: string,
+  env: NodeJS.ProcessEnv = process.env,
+  warn: (message: string) => void = defaultWarn,
+): LongstoneConfig {
+  const resolved = resolveConfigPath(path, env);
+
+  // A cwd config is invisible by design. Say so once, so an operator whose
+  // project has one is not silently running against defaults. An explicit
+  // path (or an env path naming that same file) is the opt-in.
+  if (resolved.source !== 'explicit' && !warnedProjectConfig) {
+    const projectPath = projectConfigPath();
+    if (resolve(projectPath) !== resolve(resolved.path) && existsSync(projectPath)) {
+      warnedProjectConfig = true;
+      warn(
+        `longstone: ignoring project config at ${projectPath}; ` +
+          'use --config <path> or LONGSTONE_CONFIG to opt in ' +
+          `(default: ${userConfigPath()})`,
+      );
+    }
+  }
+
   let file: Partial<LongstoneConfig> = {};
   try {
-    file = JSON.parse(readFileSync(path, 'utf8')) as Partial<LongstoneConfig>;
+    file = JSON.parse(readFileSync(resolved.path, 'utf8')) as Partial<LongstoneConfig>;
   } catch (error) {
+    // Only a missing file is empty. An unreadable or malformed file must fail
+    // loudly instead of silently falling back to defaults.
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
   }
 
@@ -162,12 +223,13 @@ export function validate(config: LongstoneConfig): void {
   }
 }
 
-export function saveConfig(config: LongstoneConfig, path = CONFIG_PATH): void {
+export function saveConfig(config: LongstoneConfig, path?: string): void {
   validate(config);
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`);
+  const target = resolveConfigPath(path).path;
+  mkdirSync(dirname(target), { recursive: true });
+  writeFileSync(target, `${JSON.stringify(config, null, 2)}\n`);
 }
 
 export function configPathFor(cwd: string): string {
-  return join(cwd, CONFIG_PATH);
+  return projectConfigPath(cwd);
 }
