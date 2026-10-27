@@ -5,6 +5,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 # Runs only the dependency-free bundle checks. The manual proof against the
 # real harness is intentionally not run here because `@deepseek-ai/dsh` is a
 # preview dependency. To reproduce it locally:
