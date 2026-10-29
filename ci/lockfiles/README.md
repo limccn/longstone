@@ -71,6 +71,60 @@ sha256sum pnpm-lock.yaml
 The result must be 182,220 bytes with the SHA-256 above. Update this file and
 `.github/workflows/lockfile-check.yml` together when the ledger changes.
 
+## `hisaishi-ci.yaml`
+
+- Workflow: `hisaishi/.github/workflows/ci.yml` (`verify`)
+- Workspace packages: `hisaishi`, `menhir/ts`
+- pnpm: `12.11.2`
+- Node: `24`
+- Generated: 2026-10-29
+- Size: 86,935 bytes
+- SHA-256: `e5e863d25746493f00b303febcc622b6dcc2280fe732f1fb1768b2d6aad23f5f`
+- Inputs:
+  - `hisaishi`: `7c8c58ee250e4f85e207d7317cb545da6fc024ce`
+  - `menhir`: `cf08e105c526e2cdf3438854cc3cf3825ed3d4d3`
+
+### Regenerate
+
+Check out the two inputs at the recorded SHAs, lay them out as below, then run
+pnpm from the workspace root. Delete any existing lockfile first so pnpm
+resolves from scratch.
+
+```text
+workspace/
+├── pnpm-workspace.yaml
+├── package.json
+├── hisaishi/            # hisaishi at 7c8c58e...
+└── menhir/ts            # menhir at cf08e10...
+```
+
+`package.json`:
+
+```json
+{"name":"ci-workspace","private":true,"packageManager":"pnpm@12.11.2"}
+```
+
+`pnpm-workspace.yaml`:
+
+```yaml
+packages:
+  - "menhir/ts"
+  - "hisaishi"
+allowBuilds:
+  "esbuild": true
+  "sharp": true
+  "workerd": true
+```
+
+```bash
+rm -f pnpm-lock.yaml
+corepack pnpm install --lockfile-only
+sha256sum pnpm-lock.yaml
+```
+
+The result must be 86,935 bytes with the SHA-256 above. Update this file and
+`.github/workflows/lockfile-check.yml` together when the ledger changes.
+
 ### Update process
 
 1. Change a component manifest or workspace input.

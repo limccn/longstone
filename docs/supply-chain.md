@@ -2,7 +2,7 @@
 
 Status as of 2026-10-29. This file is the canonical explanation for the
 `pnpm install --no-frozen-lockfile` comments in the component workflows, the
-`longstone-ui` reviewed-lockfile ledger, and the security claims in the
+reviewed-lockfile ledgers in `ci/lockfiles/`, and the security claims in the
 component repositories.
 
 ## Scope
@@ -16,7 +16,8 @@ Their twelve GitHub Actions workflows cover build, deploy, registry, skill, and
 lockfile checks. The seven build and deploy workflows assemble a temporary pnpm
 workspace at run time; `dsh-plugin`, `mcp-registry`, `skill`, and
 `longstone-wallet` run without assembling one. `longstone`'s `lockfile-check`
-assembles the `longstone-ui` layout only to verify the reviewed ledger. The
+assembles the `longstone-ui` and `hisaishi` layouts only to verify the reviewed
+ledgers. The
 project root (`d:\Workspace\MemoryOverEth`) is **not** a Git repository, so no
 root-level lockfile is available to CI.
 
@@ -46,12 +47,19 @@ ledger to `workspace/pnpm-lock.yaml`, and run
 `pnpm install --frozen-lockfile`. A missing or stale ledger fails the job; there
 is no non-frozen fallback.
 
+`hisaishi` is the second workflow migrated. Its
+`longstone/ci/lockfiles/hisaishi-ci.yaml` records the `hisaishi` /
+`menhir/ts` layout; `hisaishi`'s `ci` workflow copies it to
+`workspace/pnpm-lock.yaml` and installs with `--frozen-lockfile`.
+
 `longstone/ci/lockfiles/README.md` records the input SHAs and regeneration
-steps. `longstone`'s `lockfile-check` workflow regenerates the lockfile from
-those inputs and compares it byte-for-byte with the ledger.
+steps. `longstone`'s `lockfile-check` workflow regenerates each lockfile from
+its recorded inputs and compares it byte-for-byte with the ledger.
 
 This is a per-workflow rollout, not a blanket claim. The remaining assembled
-workflows still use `--no-frozen-lockfile` under the L-6 exception below.
+workflows (`longstone`, `menhir`, `longstone-surface`, `longstone-ext`, and
+`longstone-vscode`) still use `--no-frozen-lockfile` under the L-6 exception
+below.
 
 ## Current controls
 
@@ -61,12 +69,17 @@ workflows still use `--no-frozen-lockfile` under the L-6 exception below.
   both its `verify` and `deploy` jobs install from the reviewed
   `longstone/ci/lockfiles/longstone-ui-deploy.yaml` ledger with
   `--frozen-lockfile`.
+- `hisaishi` installs from `longstone/ci/lockfiles/hisaishi-ci.yaml` with
+  `--frozen-lockfile`; `lockfile-check` regenerates the `hisaishi` /
+  `menhir/ts` layout from the recorded input SHAs.
 - `longstone-wallet` has a committed `pnpm-lock.yaml` and a frozen install; it
   is the only component whose lockfile lives in its own repository.
-- The remaining assembled-workspace repositories keep
-  `--no-frozen-lockfile` with a comment pointing at this file. This is a
-  documented exception, not a claim that those workspaces are frozen.
-- `longstone`'s `lockfile-check` workflow verifies the committed ledger against
+- The remaining assembled-workspace workflows (`longstone`, `menhir`,
+  `longstone-surface`, `longstone-ext` with two installs, and
+  `longstone-vscode`) keep `--no-frozen-lockfile` with a comment pointing at
+  this file. This is a documented exception, not a claim that those workspaces
+  are frozen.
+- `longstone`'s `lockfile-check` workflow verifies each committed ledger against
   its recorded inputs on every pull request and push to `main`.
 
 Adding `pnpm audit` gates to the remaining repositories is follow-up work, not
@@ -118,6 +131,7 @@ package manager changes.
 
 The evaluation task `10-27-lockfile-assembled-workspace` selected B′
 (`longstone`-hosted ledger). The rollout task `10-29-lockfile-ledger-rollout`
-is migrating workflows in order, starting with `longstone-ui`. Until a workflow
-is listed above as migrated, it remains non-frozen, and no repository or CI
-text should claim otherwise.
+migrated `longstone-ui`; the follow-up task `10-29-lockfile-ledger-rollout-rest`
+continues in order with `hisaishi` (migrated) and the remaining workflows.
+Until a workflow is listed above as migrated, it remains non-frozen, and no
+repository or CI text should claim otherwise.
