@@ -417,6 +417,71 @@ sha256sum pnpm-lock.yaml
 The result must be 117,167 bytes with the SHA-256 above. Update this file and
 `.github/workflows/lockfile-check.yml` together when the ledger changes.
 
+## `longstone-vscode-ci.yaml`
+
+- Workflow: `longstone-vscode/.github/workflows/ci.yml` (`verify`, Ubuntu and
+  Windows matrix)
+- Workspace packages: `menhir/ts`, `longstone-surface`, `longstone-wallet`,
+  `longstone-vscode`
+- pnpm: `12.11.2`
+- Node: `24`
+- Generated: 2026-10-29
+- Size: 84,859 bytes
+- SHA-256: `4b9eae34c46061168d1e7725b16a0305fcaf6dbfa8d4d0704d0005c68b8d6e0b`
+- Inputs:
+  - `longstone-vscode`: `0385572ef52e020c510b0e482687cb693c441735`
+  - `menhir`: `cf08e105c526e2cdf3438854cc3cf3825ed3d4d3`
+  - `longstone-surface`: `5dc5e3b0971187803b355e211a807d15b1fda584`
+  - `longstone-wallet`: `2df16b709b85d80d919645e8304eab73c1d70e8c`
+
+The ledger is LF-only. `longstone/.gitattributes` pins
+`ci/lockfiles/*.yaml text eol=lf`, so the Windows matrix job checks out the
+same bytes as Ubuntu before copying it.
+
+### Regenerate
+
+Check out the four inputs at the recorded SHAs, lay them out as below, then run
+pnpm from the workspace root. Delete any existing lockfile first so pnpm
+resolves from scratch.
+
+```text
+workspace/
+├── pnpm-workspace.yaml
+├── package.json
+├── menhir/              # menhir at cf08e10...
+├── longstone-surface/   # longstone-surface at 5dc5e3b...
+├── longstone-wallet/    # longstone-wallet at 2df16b7...
+└── longstone-vscode/    # longstone-vscode at 0385572...
+```
+
+`package.json`:
+
+```json
+{"name":"ci-workspace","private":true,"packageManager":"pnpm@12.11.2"}
+```
+
+`pnpm-workspace.yaml`:
+
+```yaml
+packages:
+  - "menhir/ts"
+  - "longstone-surface"
+  - "longstone-wallet"
+  - "longstone-vscode"
+allowBuilds:
+  "esbuild": true
+  "@vscode/vsce-sign": true
+```
+
+```bash
+rm -f pnpm-lock.yaml
+corepack pnpm install --lockfile-only
+sha256sum pnpm-lock.yaml
+```
+
+The result must be 84,859 bytes with the SHA-256 above. Update this file and
+`.github/workflows/lockfile-check.yml` together when the ledger changes.
+
 ### Update process
 
 1. Change a component manifest or workspace input.

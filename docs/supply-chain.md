@@ -1,9 +1,10 @@
-# Supply-chain notes: CI permissions, action pins, and the L-6 lockfile exception
+# Supply-chain notes: CI permissions, action pins, and reviewed lockfiles
 
 Status as of 2026-10-29. This file is the canonical explanation for the
-`pnpm install --no-frozen-lockfile` comments in the component workflows, the
-reviewed-lockfile ledgers in `ci/lockfiles/`, and the security claims in the
-component repositories.
+reviewed-lockfile ledgers in `ci/lockfiles/`, the retired L-6 non-frozen
+exception, and the security claims in the component repositories. After the
+`longstone-vscode` migration no workflow uses `--no-frozen-lockfile`; the
+exception is retired and recorded here for review history.
 
 ## Scope
 
@@ -17,8 +18,8 @@ lockfile checks. The seven build and deploy workflows assemble a temporary pnpm
 workspace at run time; `dsh-plugin`, `mcp-registry`, `skill`, and
 `longstone-wallet` run without assembling one. `longstone`'s `lockfile-check`
 assembles the `longstone-ui`, `hisaishi`, `longstone`, `menhir`,
-`longstone-surface`, and `longstone-ext` layouts only to verify the reviewed
-ledgers. The
+`longstone-surface`, `longstone-ext`, and `longstone-vscode` layouts only to
+verify the reviewed ledgers. The
 project root (`d:\Workspace\MemoryOverEth`) is **not** a Git repository, so no
 root-level lockfile is available to CI.
 
@@ -80,9 +81,16 @@ orchestrator needs to start `hardhat node`). Both jobs copy their ledger to
 steps. `longstone`'s `lockfile-check` workflow regenerates each lockfile from
 its recorded inputs and compares it byte-for-byte with the ledger.
 
-This is a per-workflow rollout, not a blanket claim. The remaining assembled
-workflow (`longstone-vscode`) still uses `--no-frozen-lockfile` under the L-6
-exception below.
+`longstone-vscode` is the seventh and last migration. Its
+`longstone/ci/lockfiles/longstone-vscode-ci.yaml` records the `menhir/ts` /
+`longstone-surface` / `longstone-wallet` / `longstone-vscode` layout; both the
+Ubuntu and Windows matrix jobs copy it to `workspace/pnpm-lock.yaml` and
+install with `--frozen-lockfile`. The ledger is LF-only and `longstone`'s
+`.gitattributes` pins `ci/lockfiles/*.yaml text eol=lf`, so the Windows
+checkout matches.
+
+All seven assembled build and deploy workflows now install from a reviewed
+ledger with `--frozen-lockfile`.
 
 ## Current controls
 
@@ -108,14 +116,16 @@ exception below.
   with `--frozen-lockfile`.
 - `longstone-wallet` has a committed `pnpm-lock.yaml` and a frozen install; it
   is the only component whose lockfile lives in its own repository.
-- The remaining assembled-workspace workflow (`longstone-vscode`) keeps
-  `--no-frozen-lockfile` with a comment pointing at this file. This is a
-  documented exception, not a claim that that workspace is frozen.
+- `longstone-vscode` installs from
+  `longstone/ci/lockfiles/longstone-vscode-ci.yaml` with `--frozen-lockfile`
+  in both matrix jobs.
+- No workflow uses `--no-frozen-lockfile` anymore. The L-6 exception is
+  retired and kept only as a review record.
 - `longstone`'s `lockfile-check` workflow verifies each committed ledger against
   its recorded inputs on every pull request and push to `main`.
 
 Adding `pnpm audit` gates to the remaining repositories is follow-up work, not
-part of this exception.
+part of the lockfile policy.
 
 ## Action pinning
 
@@ -158,13 +168,13 @@ assembled workspace is frozen.
 
 ## Review and follow-up
 
-Review this exception by **2027-01-31**, or earlier if the workspace layout or
-package manager changes.
+Review the ledger policy by **2027-01-31**, or earlier if the workspace layout
+or package manager changes.
 
 The evaluation task `10-27-lockfile-assembled-workspace` selected B′
 (`longstone`-hosted ledger). The rollout task `10-29-lockfile-ledger-rollout`
 migrated `longstone-ui`; the follow-up task `10-29-lockfile-ledger-rollout-rest`
 continues in order with `hisaishi`, `longstone`, `menhir`, `longstone-surface`,
-and `longstone-ext` (all migrated) and the remaining workflows.
+`longstone-ext`, and `longstone-vscode` (all seven migrated).
 Until a workflow is listed above as migrated, it remains non-frozen, and no
 repository or CI text should claim otherwise.
