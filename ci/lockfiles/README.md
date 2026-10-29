@@ -81,8 +81,12 @@ The result must be 182,220 bytes with the SHA-256 above. Update this file and
 - Size: 86,935 bytes
 - SHA-256: `e5e863d25746493f00b303febcc622b6dcc2280fe732f1fb1768b2d6aad23f5f`
 - Inputs:
-  - `hisaishi`: `7c8c58ee250e4f85e207d7317cb545da6fc024ce`
+  - `hisaishi`: `29562c44a0ff96ea80d35e787ca7ea0ab6da3627`
   - `menhir`: `cf08e105c526e2cdf3438854cc3cf3825ed3d4d3`
+
+`7c8c58e` (the `hisaishi` commit used for the first generation) and `29562c4`
+differ only in `.github/workflows/ci.yml`. Regenerating at `29562c4` produced
+the same bytes on 2026-10-29.
 
 ### Regenerate
 
@@ -94,7 +98,7 @@ resolves from scratch.
 workspace/
 ├── pnpm-workspace.yaml
 ├── package.json
-├── hisaishi/            # hisaishi at 7c8c58e...
+├── hisaishi/            # hisaishi at 29562c4...
 └── menhir/ts            # menhir at cf08e10...
 ```
 
@@ -123,6 +127,64 @@ sha256sum pnpm-lock.yaml
 ```
 
 The result must be 86,935 bytes with the SHA-256 above. Update this file and
+`.github/workflows/lockfile-check.yml` together when the ledger changes.
+
+## `longstone-ci.yaml`
+
+- Workflow: `longstone/.github/workflows/ci.yml` (`verify`)
+- Workspace packages: `longstone`, `hisaishi`, `menhir/ts`, `menhir/contracts`
+- pnpm: `12.11.2`
+- Node: `24`
+- Generated: 2026-10-29
+- Size: 126,193 bytes
+- SHA-256: `5af88665af9e471950443da08f1424a96b686c2c923d5b9f0eeb6cbe4e3865bf`
+- Inputs:
+  - `longstone`: `a0333313dad8590748054df02ddd3932d6fb3186`
+  - `hisaishi`: `29562c44a0ff96ea80d35e787ca7ea0ab6da3627`
+  - `menhir`: `cf08e105c526e2cdf3438854cc3cf3825ed3d4d3`
+
+### Regenerate
+
+Check out the three inputs at the recorded SHAs, lay them out as below, then run
+pnpm from the workspace root. Delete any existing lockfile first so pnpm
+resolves from scratch.
+
+```text
+workspace/
+├── pnpm-workspace.yaml
+├── package.json
+├── longstone/           # longstone at a033331...
+├── hisaishi/            # hisaishi at 29562c4...
+└── menhir/              # menhir at cf08e10...
+```
+
+`package.json`:
+
+```json
+{"name":"ci-workspace","private":true,"packageManager":"pnpm@12.11.2"}
+```
+
+`pnpm-workspace.yaml`:
+
+```yaml
+packages:
+  - "menhir/ts"
+  - "menhir/contracts"
+  - "hisaishi"
+  - "longstone"
+allowBuilds:
+  "esbuild": true
+  "sharp": true
+  "workerd": true
+```
+
+```bash
+rm -f pnpm-lock.yaml
+corepack pnpm install --lockfile-only
+sha256sum pnpm-lock.yaml
+```
+
+The result must be 126,193 bytes with the SHA-256 above. Update this file and
 `.github/workflows/lockfile-check.yml` together when the ledger changes.
 
 ### Update process
