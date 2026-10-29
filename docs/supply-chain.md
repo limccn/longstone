@@ -1,8 +1,9 @@
 # Supply-chain notes: CI permissions, action pins, and the L-6 lockfile exception
 
-Status as of 2026-10-27. This file is the canonical explanation for the
-`pnpm install --no-frozen-lockfile` comments in the component workflows and for
-the security claims in the component repositories.
+Status as of 2026-10-29. This file is the canonical explanation for the
+`pnpm install --no-frozen-lockfile` comments in the component workflows, the
+`longstone-ui` reviewed-lockfile ledger, and the security claims in the
+component repositories.
 
 ## Scope
 
@@ -11,12 +12,13 @@ Eight independent Git repositories make up MemoryOverEth:
 `menhir`, `hisaishi`, `longstone`, `longstone-surface`, `longstone-ext`,
 `longstone-vscode`, `longstone-wallet`, and `longstone-ui`.
 
-Their eleven GitHub Actions workflows cover build, deploy, registry, and skill
-checks. The seven build and deploy workflows assemble a temporary pnpm
+Their twelve GitHub Actions workflows cover build, deploy, registry, skill, and
+lockfile checks. The seven build and deploy workflows assemble a temporary pnpm
 workspace at run time; `dsh-plugin`, `mcp-registry`, `skill`, and
-`longstone-wallet` run without assembling one. The project root
-(`d:\Workspace\MemoryOverEth`) is **not** a Git repository, so no root-level
-lockfile is available to CI.
+`longstone-wallet` run without assembling one. `longstone`'s `lockfile-check`
+assembles the `longstone-ui` layout only to verify the reviewed ledger. The
+project root (`d:\Workspace\MemoryOverEth`) is **not** a Git repository, so no
+root-level lockfile is available to CI.
 
 ## Why an assembled workspace cannot use a per-repo lockfile
 
@@ -34,16 +36,38 @@ CI and the developer checkout diverge while looking reproducible.
 checks out only itself, and therefore commits a lockfile and installs with
 `--frozen-lockfile`.
 
+## Reviewed lockfile ledger (B′)
+
+`longstone-ui` is the first assembled workflow migrated to a reviewed lockfile.
+`longstone/ci/lockfiles/longstone-ui-deploy.yaml` records the full lockfile for
+the exact `app` / `longstone-surface` / `menhir/ts` layout and input commits.
+Both `longstone-ui` `verify` and `deploy` checkout `limccn/longstone`, copy the
+ledger to `workspace/pnpm-lock.yaml`, and run
+`pnpm install --frozen-lockfile`. A missing or stale ledger fails the job; there
+is no non-frozen fallback.
+
+`longstone/ci/lockfiles/README.md` records the input SHAs and regeneration
+steps. `longstone`'s `lockfile-check` workflow regenerates the lockfile from
+those inputs and compares it byte-for-byte with the ledger.
+
+This is a per-workflow rollout, not a blanket claim. The remaining assembled
+workflows still use `--no-frozen-lockfile` under the L-6 exception below.
+
 ## Current controls
 
 - Exact versions in every `package.json`; no ranges for runtime dependencies.
 - CI builds and tests the assembled workspace on every pull request and push.
-- `longstone-ui` runs `pnpm audit --prod` as part of its deploy workflow.
+- `longstone-ui` runs `pnpm audit --prod` as part of its deploy workflow, and
+  both its `verify` and `deploy` jobs install from the reviewed
+  `longstone/ci/lockfiles/longstone-ui-deploy.yaml` ledger with
+  `--frozen-lockfile`.
 - `longstone-wallet` has a committed `pnpm-lock.yaml` and a frozen install; it
-  is the only component for which the lockfile fully describes the tree.
-- The assembled-workspace repositories keep `--no-frozen-lockfile` with a
-  comment pointing at this file. This is a documented exception, not a claim
-  that the workspace is frozen.
+  is the only component whose lockfile lives in its own repository.
+- The remaining assembled-workspace repositories keep
+  `--no-frozen-lockfile` with a comment pointing at this file. This is a
+  documented exception, not a claim that those workspaces are frozen.
+- `longstone`'s `lockfile-check` workflow verifies the committed ledger against
+  its recorded inputs on every pull request and push to `main`.
 
 Adding `pnpm audit` gates to the remaining repositories is follow-up work, not
 part of this exception.
@@ -92,7 +116,8 @@ assembled workspace is frozen.
 Review this exception by **2027-01-31**, or earlier if the workspace layout or
 package manager changes.
 
-The follow-up task `10-27-lockfile-assembled-workspace` evaluates reproducible
-assembly options (CI-generated lockfile and cache, a manifest repository, or
-pinned transitive dependencies). Until that work lands, the assembled workspace
-remains non-frozen, and no repository or CI text should claim otherwise.
+The evaluation task `10-27-lockfile-assembled-workspace` selected B′
+(`longstone`-hosted ledger). The rollout task `10-29-lockfile-ledger-rollout`
+is migrating workflows in order, starting with `longstone-ui`. Until a workflow
+is listed above as migrated, it remains non-frozen, and no repository or CI
+text should claim otherwise.

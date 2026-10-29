@@ -2,3 +2,8 @@
 # scripts/generate-prompts.mjs --check. Pin LF so a Windows checkout with
 # core.autocrlf=true does not report false drift.
 prompts/** text eol=lf
+
+# Lockfile ledgers are compared byte-for-byte with pnpm output by
+# .github/workflows/lockfile-check.yml. Pin LF so a Windows checkout with
+# core.autocrlf=true cannot introduce false drift.
+ci/lockfiles/*.yaml text eol=lf
