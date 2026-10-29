@@ -16,8 +16,8 @@ Their twelve GitHub Actions workflows cover build, deploy, registry, skill, and
 lockfile checks. The seven build and deploy workflows assemble a temporary pnpm
 workspace at run time; `dsh-plugin`, `mcp-registry`, `skill`, and
 `longstone-wallet` run without assembling one. `longstone`'s `lockfile-check`
-assembles the `longstone-ui`, `hisaishi`, `longstone`, and `menhir` layouts only
-to verify the reviewed ledgers. The
+assembles the `longstone-ui`, `hisaishi`, `longstone`, `menhir`, and
+`longstone-surface` layouts only to verify the reviewed ledgers. The
 project root (`d:\Workspace\MemoryOverEth`) is **not** a Git repository, so no
 root-level lockfile is available to CI.
 
@@ -63,13 +63,18 @@ records the `menhir/ts` and `menhir/contracts` layout; `menhir`'s `ci` workflow
 copies it to `workspace/pnpm-lock.yaml` and installs with
 `--frozen-lockfile`.
 
+`longstone-surface` is the fifth migration. Its
+`longstone/ci/lockfiles/longstone-surface-ci.yaml` records the `surface` /
+`menhir/ts` layout; its `ci` workflow copies it to
+`workspace/pnpm-lock.yaml` and installs with `--frozen-lockfile`.
+
 `longstone/ci/lockfiles/README.md` records the input SHAs and regeneration
 steps. `longstone`'s `lockfile-check` workflow regenerates each lockfile from
 its recorded inputs and compares it byte-for-byte with the ledger.
 
 This is a per-workflow rollout, not a blanket claim. The remaining assembled
-workflows (`longstone-surface`, `longstone-ext`, and `longstone-vscode`) still
-use `--no-frozen-lockfile` under the L-6 exception below.
+workflows (`longstone-ext` and `longstone-vscode`) still use
+`--no-frozen-lockfile` under the L-6 exception below.
 
 ## Current controls
 
@@ -87,11 +92,14 @@ use `--no-frozen-lockfile` under the L-6 exception below.
   the ledger out explicitly at `main`.
 - `menhir` installs from `longstone/ci/lockfiles/menhir-ci.yaml` with
   `--frozen-lockfile`.
+- `longstone-surface` installs from
+  `longstone/ci/lockfiles/longstone-surface-ci.yaml` with
+  `--frozen-lockfile`.
 - `longstone-wallet` has a committed `pnpm-lock.yaml` and a frozen install; it
   is the only component whose lockfile lives in its own repository.
-- The remaining assembled-workspace workflows (`longstone-surface`,
-  `longstone-ext` with two installs, and `longstone-vscode`) keep
-  `--no-frozen-lockfile` with a comment pointing at this file. This is a
+- The remaining assembled-workspace workflows (`longstone-ext` with two
+  installs and `longstone-vscode`) keep `--no-frozen-lockfile` with a comment
+  pointing at this file. This is a
   documented exception, not a claim that those workspaces are frozen.
 - `longstone`'s `lockfile-check` workflow verifies each committed ledger against
   its recorded inputs on every pull request and push to `main`.
@@ -146,7 +154,7 @@ package manager changes.
 The evaluation task `10-27-lockfile-assembled-workspace` selected B′
 (`longstone`-hosted ledger). The rollout task `10-29-lockfile-ledger-rollout`
 migrated `longstone-ui`; the follow-up task `10-29-lockfile-ledger-rollout-rest`
-continues in order with `hisaishi`, `longstone`, and `menhir` (all migrated)
-and the remaining workflows.
+continues in order with `hisaishi`, `longstone`, `menhir`, and
+`longstone-surface` (all migrated) and the remaining workflows.
 Until a workflow is listed above as migrated, it remains non-frozen, and no
 repository or CI text should claim otherwise.

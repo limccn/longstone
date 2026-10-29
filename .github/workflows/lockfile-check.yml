@@ -250,3 +250,58 @@ jobs:
           diff -u ../ledger/ci/lockfiles/menhir-ci.yaml pnpm-lock.yaml || true
           echo "::error::ci/lockfiles/menhir-ci.yaml is out of date; regenerate it and update the input SHAs"
           exit 1
+
+  longstone-surface-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout longstone ledger
+        uses: actions/checkout@v4
+        with:
+          path: ledger
+
+      - name: Checkout longstone-surface
+        uses: actions/checkout@v4
+        with:
+          repository: limccn/longstone-surface
+          ref: ${{ env.LONGSTONE_SURFACE_SHA }}
+          token: ${{ github.token }}
+          path: workspace/surface
+
+      - name: Checkout menhir
+        uses: actions/checkout@v4
+        with:
+          repository: limccn/menhir
+          ref: ${{ env.MENHIR_SHA }}
+          token: ${{ github.token }}
+          path: workspace/menhir
+
+      - name: Assemble workspace
+        working-directory: workspace
+        run: |
+          printf 'packages:\n  - "surface"\n  - "menhir/ts"\nallowBuilds:\n  "esbuild": true\n' > pnpm-workspace.yaml
+          printf '{"name":"ci-workspace","private":true,"packageManager":"pnpm@12.11.2"}\n' > package.json
+
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          package_json_file: workspace/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Regenerate lockfile
+        working-directory: workspace
+        run: |
+          rm -f pnpm-lock.yaml
+          pnpm install --lockfile-only
+
+      - name: Compare with ledger
+        working-directory: workspace
+        run: |
+          if cmp -s ../ledger/ci/lockfiles/longstone-surface-ci.yaml pnpm-lock.yaml; then
+            echo "Ledger matches the regenerated lockfile."
+            exit 0
+          fi
+          diff -u ../ledger/ci/lockfiles/longstone-surface-ci.yaml pnpm-lock.yaml || true
+          echo "::error::ci/lockfiles/longstone-surface-ci.yaml is out of date; regenerate it and update the input SHAs"
+          exit 1

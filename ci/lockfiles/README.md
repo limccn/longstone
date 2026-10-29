@@ -239,6 +239,58 @@ sha256sum pnpm-lock.yaml
 The result must be 83,684 bytes with the SHA-256 above. Update this file and
 `.github/workflows/lockfile-check.yml` together when the ledger changes.
 
+## `longstone-surface-ci.yaml`
+
+- Workflow: `longstone-surface/.github/workflows/ci.yml` (`verify`)
+- Workspace packages: `surface` (`longstone-surface`), `menhir/ts`
+- pnpm: `12.11.2`
+- Node: `24`
+- Generated: 2026-10-29
+- Size: 47,215 bytes
+- SHA-256: `23cb51fa7417213d1d2271faf422bdfd4a464b0b1d8f1edcfd9bac9af07dde2f`
+- Inputs:
+  - `longstone-surface`: `5dc5e3b0971187803b355e211a807d15b1fda584`
+  - `menhir`: `cf08e105c526e2cdf3438854cc3cf3825ed3d4d3`
+
+### Regenerate
+
+Check out the two inputs at the recorded SHAs, lay them out as below, then run
+pnpm from the workspace root. Delete any existing lockfile first so pnpm
+resolves from scratch.
+
+```text
+workspace/
+├── pnpm-workspace.yaml
+├── package.json
+├── surface/             # longstone-surface at 5dc5e3b...
+└── menhir/ts            # menhir at cf08e10...
+```
+
+`package.json`:
+
+```json
+{"name":"ci-workspace","private":true,"packageManager":"pnpm@12.11.2"}
+```
+
+`pnpm-workspace.yaml`:
+
+```yaml
+packages:
+  - "surface"
+  - "menhir/ts"
+allowBuilds:
+  "esbuild": true
+```
+
+```bash
+rm -f pnpm-lock.yaml
+corepack pnpm install --lockfile-only
+sha256sum pnpm-lock.yaml
+```
+
+The result must be 47,215 bytes with the SHA-256 above. Update this file and
+`.github/workflows/lockfile-check.yml` together when the ledger changes.
+
 ### Update process
 
 1. Change a component manifest or workspace input.
