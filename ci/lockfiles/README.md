@@ -187,6 +187,58 @@ sha256sum pnpm-lock.yaml
 The result must be 126,193 bytes with the SHA-256 above. Update this file and
 `.github/workflows/lockfile-check.yml` together when the ledger changes.
 
+## `menhir-ci.yaml`
+
+- Workflow: `menhir/.github/workflows/ci.yml` (`verify`)
+- Workspace packages: `menhir/ts`, `menhir/contracts`
+- pnpm: `12.11.2`
+- Node: `24`
+- Generated: 2026-10-29
+- Size: 83,684 bytes
+- SHA-256: `6face08a514032ec92ab9a4495d54cc576205727ab21474e3b25fa716379d35d`
+- Inputs:
+  - `menhir`: `cf08e105c526e2cdf3438854cc3cf3825ed3d4d3`
+
+### Regenerate
+
+Check out the input at the recorded SHA, lay it out as below, then run pnpm from
+the workspace root. Delete any existing lockfile first so pnpm resolves from
+scratch.
+
+```text
+workspace/
+├── pnpm-workspace.yaml
+├── package.json
+└── menhir/              # menhir at cf08e10...
+```
+
+`package.json`:
+
+```json
+{"name":"ci-workspace","private":true,"packageManager":"pnpm@12.11.2"}
+```
+
+`pnpm-workspace.yaml`:
+
+```yaml
+packages:
+  - "menhir/ts"
+  - "menhir/contracts"
+allowBuilds:
+  "esbuild": true
+  "sharp": true
+  "workerd": true
+```
+
+```bash
+rm -f pnpm-lock.yaml
+corepack pnpm install --lockfile-only
+sha256sum pnpm-lock.yaml
+```
+
+The result must be 83,684 bytes with the SHA-256 above. Update this file and
+`.github/workflows/lockfile-check.yml` together when the ledger changes.
+
 ### Update process
 
 1. Change a component manifest or workspace input.
