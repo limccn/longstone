@@ -291,6 +291,132 @@ sha256sum pnpm-lock.yaml
 The result must be 47,215 bytes with the SHA-256 above. Update this file and
 `.github/workflows/lockfile-check.yml` together when the ledger changes.
 
+## `longstone-ext-ci-verify.yaml`
+
+- Workflow: `longstone-ext/.github/workflows/ci.yml` (`verify`)
+- Workspace packages: `app` (`longstone-ext`), `longstone-surface`,
+  `longstone-wallet`, `menhir/ts`
+- pnpm: `12.11.2`
+- Node: `24`
+- Generated: 2026-10-29
+- Size: 81,969 bytes
+- SHA-256: `69d8f2d381dc9176bbe2debe6ede5b83c16195494cd397ca81f8ccc7ae1371b3`
+- Inputs:
+  - `longstone-ext`: `9c80d550df4b2b11afce344790fff3db67960d04`
+  - `menhir`: `cf08e105c526e2cdf3438854cc3cf3825ed3d4d3`
+  - `longstone-surface`: `5dc5e3b0971187803b355e211a807d15b1fda584`
+  - `longstone-wallet`: `2df16b709b85d80d919645e8304eab73c1d70e8c`
+
+The first generation used `menhir` `64cd72e` and `longstone-surface` `cad3aa7`;
+those commits differ from the recorded SHAs only in `.github/workflows/ci.yml`.
+Regenerating at the recorded SHAs produced the same bytes on 2026-10-29.
+
+### Regenerate
+
+Check out the four inputs at the recorded SHAs, lay them out as below, then run
+pnpm from the workspace root. Delete any existing lockfile first so pnpm
+resolves from scratch.
+
+```text
+workspace/
+├── pnpm-workspace.yaml
+├── package.json
+├── app/                 # longstone-ext at 9c80d55...
+├── menhir/              # menhir at cf08e10...
+├── longstone-surface/   # longstone-surface at 5dc5e3b...
+└── longstone-wallet/    # longstone-wallet at 2df16b7...
+```
+
+`package.json`:
+
+```json
+{"name":"ci-workspace","private":true,"packageManager":"pnpm@12.11.2"}
+```
+
+`pnpm-workspace.yaml`:
+
+```yaml
+packages:
+  - "app"
+  - "longstone-surface"
+  - "longstone-wallet"
+  - "menhir/ts"
+allowBuilds:
+  "esbuild": true
+```
+
+```bash
+rm -f pnpm-lock.yaml
+corepack pnpm install --lockfile-only
+sha256sum pnpm-lock.yaml
+```
+
+The result must be 81,969 bytes with the SHA-256 above. Update this file and
+`.github/workflows/lockfile-check.yml` together when the ledger changes.
+
+## `longstone-ext-ci-e2e.yaml`
+
+- Workflow: `longstone-ext/.github/workflows/ci.yml` (`e2e`)
+- Workspace packages: `app` (`longstone-ext`), `longstone-surface`,
+  `longstone-wallet`, `menhir/ts`, `menhir/contracts`
+- pnpm: `12.11.2`
+- Node: `24`
+- Generated: 2026-10-29
+- Size: 117,167 bytes
+- SHA-256: `4ddb2475681c253ec006d8d091c5ef955162083f250a4a236881274e02fbbae8`
+- Inputs:
+  - `longstone-ext`: `9c80d550df4b2b11afce344790fff3db67960d04`
+  - `menhir`: `cf08e105c526e2cdf3438854cc3cf3825ed3d4d3`
+  - `longstone-surface`: `5dc5e3b0971187803b355e211a807d15b1fda584`
+  - `longstone-wallet`: `2df16b709b85d80d919645e8304eab73c1d70e8c`
+
+`e2e` adds `menhir/contracts` because `scripts/e2e.mjs` starts `hardhat node`
+from that package. The sibling commits used for the first generation differ
+from the recorded SHAs only in `.github/workflows/ci.yml`; the regenerated
+bytes matched on 2026-10-29.
+
+### Regenerate
+
+Lay out the same four inputs as `longstone-ext-ci-verify.yaml`, then use:
+
+```text
+workspace/
+├── pnpm-workspace.yaml
+├── package.json
+├── app/                 # longstone-ext at 9c80d55...
+├── menhir/              # menhir at cf08e10...
+├── longstone-surface/   # longstone-surface at 5dc5e3b...
+└── longstone-wallet/    # longstone-wallet at 2df16b7...
+```
+
+`package.json`:
+
+```json
+{"name":"ci-workspace","private":true,"packageManager":"pnpm@12.11.2"}
+```
+
+`pnpm-workspace.yaml`:
+
+```yaml
+packages:
+  - "app"
+  - "longstone-surface"
+  - "longstone-wallet"
+  - "menhir/ts"
+  - "menhir/contracts"
+allowBuilds:
+  "esbuild": true
+```
+
+```bash
+rm -f pnpm-lock.yaml
+corepack pnpm install --lockfile-only
+sha256sum pnpm-lock.yaml
+```
+
+The result must be 117,167 bytes with the SHA-256 above. Update this file and
+`.github/workflows/lockfile-check.yml` together when the ledger changes.
+
 ### Update process
 
 1. Change a component manifest or workspace input.

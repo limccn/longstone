@@ -21,6 +21,8 @@ env:
   HISAISHI_SHA: "29562c44a0ff96ea80d35e787ca7ea0ab6da3627"
   MENHIR_SHA: "cf08e105c526e2cdf3438854cc3cf3825ed3d4d3"
   LONGSTONE_SURFACE_SHA: "5dc5e3b0971187803b355e211a807d15b1fda584"
+  LONGSTONE_EXT_SHA: "9c80d550df4b2b11afce344790fff3db67960d04"
+  LONGSTONE_WALLET_SHA: "2df16b709b85d80d919645e8304eab73c1d70e8c"
 
 jobs:
   longstone-ui-deploy:
@@ -304,4 +306,146 @@ jobs:
           fi
           diff -u ../ledger/ci/lockfiles/longstone-surface-ci.yaml pnpm-lock.yaml || true
           echo "::error::ci/lockfiles/longstone-surface-ci.yaml is out of date; regenerate it and update the input SHAs"
+          exit 1
+
+  longstone-ext-ci-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout longstone ledger
+        uses: actions/checkout@v4
+        with:
+          path: ledger
+
+      - name: Checkout longstone-ext
+        uses: actions/checkout@v4
+        with:
+          repository: limccn/longstone-ext
+          ref: ${{ env.LONGSTONE_EXT_SHA }}
+          token: ${{ github.token }}
+          path: workspace/app
+
+      - name: Checkout menhir
+        uses: actions/checkout@v4
+        with:
+          repository: limccn/menhir
+          ref: ${{ env.MENHIR_SHA }}
+          token: ${{ github.token }}
+          path: workspace/menhir
+
+      - name: Checkout longstone-surface
+        uses: actions/checkout@v4
+        with:
+          repository: limccn/longstone-surface
+          ref: ${{ env.LONGSTONE_SURFACE_SHA }}
+          token: ${{ github.token }}
+          path: workspace/longstone-surface
+
+      - name: Checkout longstone-wallet
+        uses: actions/checkout@v4
+        with:
+          repository: limccn/longstone-wallet
+          ref: ${{ env.LONGSTONE_WALLET_SHA }}
+          token: ${{ github.token }}
+          path: workspace/longstone-wallet
+
+      - name: Assemble workspace
+        working-directory: workspace
+        run: |
+          printf 'packages:\n  - "app"\n  - "longstone-surface"\n  - "longstone-wallet"\n  - "menhir/ts"\nallowBuilds:\n  "esbuild": true\n' > pnpm-workspace.yaml
+          printf '{"name":"ci-workspace","private":true,"packageManager":"pnpm@12.11.2"}\n' > package.json
+
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          package_json_file: workspace/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Regenerate lockfile
+        working-directory: workspace
+        run: |
+          rm -f pnpm-lock.yaml
+          pnpm install --lockfile-only
+
+      - name: Compare with ledger
+        working-directory: workspace
+        run: |
+          if cmp -s ../ledger/ci/lockfiles/longstone-ext-ci-verify.yaml pnpm-lock.yaml; then
+            echo "Ledger matches the regenerated lockfile."
+            exit 0
+          fi
+          diff -u ../ledger/ci/lockfiles/longstone-ext-ci-verify.yaml pnpm-lock.yaml || true
+          echo "::error::ci/lockfiles/longstone-ext-ci-verify.yaml is out of date; regenerate it and update the input SHAs"
+          exit 1
+
+  longstone-ext-ci-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout longstone ledger
+        uses: actions/checkout@v4
+        with:
+          path: ledger
+
+      - name: Checkout longstone-ext
+        uses: actions/checkout@v4
+        with:
+          repository: limccn/longstone-ext
+          ref: ${{ env.LONGSTONE_EXT_SHA }}
+          token: ${{ github.token }}
+          path: workspace/app
+
+      - name: Checkout menhir
+        uses: actions/checkout@v4
+        with:
+          repository: limccn/menhir
+          ref: ${{ env.MENHIR_SHA }}
+          token: ${{ github.token }}
+          path: workspace/menhir
+
+      - name: Checkout longstone-surface
+        uses: actions/checkout@v4
+        with:
+          repository: limccn/longstone-surface
+          ref: ${{ env.LONGSTONE_SURFACE_SHA }}
+          token: ${{ github.token }}
+          path: workspace/longstone-surface
+
+      - name: Checkout longstone-wallet
+        uses: actions/checkout@v4
+        with:
+          repository: limccn/longstone-wallet
+          ref: ${{ env.LONGSTONE_WALLET_SHA }}
+          token: ${{ github.token }}
+          path: workspace/longstone-wallet
+
+      - name: Assemble workspace
+        working-directory: workspace
+        run: |
+          printf 'packages:\n  - "app"\n  - "longstone-surface"\n  - "longstone-wallet"\n  - "menhir/ts"\n  - "menhir/contracts"\nallowBuilds:\n  "esbuild": true\n' > pnpm-workspace.yaml
+          printf '{"name":"ci-workspace","private":true,"packageManager":"pnpm@12.11.2"}\n' > package.json
+
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          package_json_file: workspace/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Regenerate lockfile
+        working-directory: workspace
+        run: |
+          rm -f pnpm-lock.yaml
+          pnpm install --lockfile-only
+
+      - name: Compare with ledger
+        working-directory: workspace
+        run: |
+          if cmp -s ../ledger/ci/lockfiles/longstone-ext-ci-e2e.yaml pnpm-lock.yaml; then
+            echo "Ledger matches the regenerated lockfile."
+            exit 0
+          fi
+          diff -u ../ledger/ci/lockfiles/longstone-ext-ci-e2e.yaml pnpm-lock.yaml || true
+          echo "::error::ci/lockfiles/longstone-ext-ci-e2e.yaml is out of date; regenerate it and update the input SHAs"
           exit 1
